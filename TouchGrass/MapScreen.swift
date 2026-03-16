@@ -6,6 +6,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import Observation
 
 // MARK: - Friend Model
 struct Friend: Identifiable {
@@ -15,13 +16,14 @@ struct Friend: Identifiable {
 }
 
 // MARK: - ViewModel for Location & Friends
-class MapViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
-    @Published var region = MKCoordinateRegion(
+@Observable
+class MapViewModel: NSObject, CLLocationManagerDelegate {
+    var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
-    @Published var userLocation: CLLocationCoordinate2D?
-    @Published var friends: [Friend] = []
+    var userLocation: CLLocationCoordinate2D?
+    var friends: [Friend] = []
 
     private let locationManager = CLLocationManager()
 
@@ -57,10 +59,10 @@ class MapViewModel: NSObject, ObservableObject, CLLocationManagerDelegate {
 
 // MARK: - Map View
 struct MapScreen: View {
-    @StateObject private var viewModel = MapViewModel()
+    @State private var viewModel = MapViewModel()
 
     var body: some View {
-        Map(coordinateRegion: $viewModel.region, showsUserLocation: true, annotationItems: viewModel.friends) { friend in
+        Map(coordinateRegion: .constant(viewModel.region), showsUserLocation: true, annotationItems: viewModel.friends) { friend in
             MapAnnotation(coordinate: friend.coordinate) {
                 VStack {
                     Image(systemName: "person.circle.fill")
@@ -82,8 +84,6 @@ struct MapScreen: View {
 }
 
 // MARK: - Preview
-struct MapScreen_Previews: PreviewProvider {
-    static var previews: some View {
-        MapScreen()
-    }
+#Preview {
+    MapScreen()
 }
