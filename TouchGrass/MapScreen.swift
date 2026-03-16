@@ -18,10 +18,10 @@ struct Friend: Identifiable {
 // MARK: - ViewModel for Location & Friends
 @Observable
 class MapViewModel: NSObject, CLLocationManagerDelegate {
-    var region = MKCoordinateRegion(
+    var position: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-    )
+    ))
     var userLocation: CLLocationCoordinate2D?
     var friends: [Friend] = []
 
@@ -46,7 +46,10 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         DispatchQueue.main.async {
             self.userLocation = location.coordinate
-            self.region.center = location.coordinate
+            self.position = .region(MKCoordinateRegion(
+                center: location.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            ))
         }
     }
 
@@ -62,17 +65,20 @@ struct MapScreen: View {
     @State private var viewModel = MapViewModel()
 
     var body: some View {
-        Map(coordinateRegion: .constant(viewModel.region), showsUserLocation: true, annotationItems: viewModel.friends) { friend in
-            MapAnnotation(coordinate: friend.coordinate) {
-                VStack {
-                    Image(systemName: "person.circle.fill")
-                        .foregroundColor(.blue)
-                        .font(.title)
-                    Text(friend.name)
-                        .font(.caption)
-                        .padding(2)
-                        .background(Color.white.opacity(0.8))
-                        .cornerRadius(5)
+        Map(position: $viewModel.position) {
+            UserAnnotation()
+            ForEach(viewModel.friends) { friend in
+                Annotation(friend.name, coordinate: friend.coordinate) {
+                    VStack {
+                        Image(systemName: "person.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title)
+                        Text(friend.name)
+                            .font(.caption)
+                            .padding(2)
+                            .background(Color.white.opacity(0.8))
+                            .cornerRadius(5)
+                    }
                 }
             }
         }
