@@ -38,7 +38,7 @@ struct ContentView: View {
                 Spacer()
                 TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person")
             }
-            .padding(.horizontal, 30)
+            .padding(.horizontal, 50)
             .padding(.vertical, 10)
             .background(Color(UIColor.systemGray6))
         }
