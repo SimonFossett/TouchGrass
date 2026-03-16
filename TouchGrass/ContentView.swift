@@ -91,10 +91,7 @@ struct SearchView: View {
 
 struct MapView: View {
     var body: some View {
-        VStack {
-            Text("Map Screen")
-                .font(.largeTitle)
-        }
+        MapScreen()
     }
 }
 
