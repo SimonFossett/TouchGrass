@@ -13,6 +13,8 @@ struct Friend: Identifiable {
     let id = UUID()
     let name: String
     var coordinate: CLLocationCoordinate2D
+    var stepScore: Int = 0
+    var isPinned: Bool = false
 }
 
 // MARK: - ViewModel for Location & Friends
