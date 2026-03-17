@@ -11,10 +11,18 @@ import MapKit
 // MARK: - Main Content View
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
+    private let firebase = FirebaseManager.shared
 
     var body: some View {
+        if firebase.isAuthenticated {
+            mainApp
+        } else {
+            AuthView()
+        }
+    }
+
+    var mainApp: some View {
         VStack(spacing: 0) {
-            // Main content area
             ZStack {
                 switch selectedTab {
                 case .home:
@@ -242,10 +250,90 @@ struct FriendDetailSheet: View {
 
 // MARK: - Placeholder Screens
 struct SearchView: View {
+    @State private var searchText = ""
+    @State private var results: [AppUser] = []
+    @State private var requestStatuses: [String: FriendRequestStatus] = [:]
+    @State private var selectedUser: AppUser? = nil
+    @State private var isLoading = false
+
     var body: some View {
-        VStack {
-            Text("Search Screen")
-                .font(.largeTitle)
+        VStack(spacing: 0) {
+            // Full-width search bar
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.gray)
+                TextField("Search for users...", text: $searchText)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                if !searchText.isEmpty {
+                    Button(action: { searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color(UIColor.systemGray5))
+
+            if searchText.isEmpty {
+                Spacer()
+                VStack(spacing: 12) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray.opacity(0.4))
+                    Text("Search for users to add as friends")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+                Spacer()
+            } else if isLoading {
+                Spacer()
+                ProgressView()
+                Spacer()
+            } else if results.isEmpty {
+                Spacer()
+                VStack(spacing: 12) {
+                    Image(systemName: "person.slash.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray.opacity(0.4))
+                    Text("No users found for \"\(searchText)\"")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(results) { user in
+                            UserSearchRow(user: user, status: requestStatuses[user.id] ?? .none)
+                                .contentShape(Rectangle())
+                                .onTapGesture { selectedUser = user }
+                            Divider()
+                                .padding(.leading, 74)
+                        }
+                    }
+                }
+            }
+        }
+        // Re-runs automatically when searchText changes; cancels the previous task
+        .task(id: searchText) {
+            guard !searchText.isEmpty else { results = []; return }
+            // 300ms debounce
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            isLoading = true
+            results = (try? await UserService.shared.searchUsers(query: searchText)) ?? []
+            isLoading = false
+        }
+        .sheet(item: $selectedUser) { user in
+            UserProfileSheet(user: user) { newStatus in
+                requestStatuses[user.id] = newStatus
+            }
+            .presentationDetents([.medium])
         }
     }
 }
@@ -253,6 +341,156 @@ struct SearchView: View {
 struct MapView: View {
     var body: some View {
         MapScreen()
+    }
+}
+
+// MARK: - Friend Request Status
+enum FriendRequestStatus {
+    case none, requested, friends
+}
+
+// MARK: - User Search Row
+struct UserSearchRow: View {
+    let user: AppUser
+    let status: FriendRequestStatus
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(avatarColor(for: user.username))
+                    .frame(width: 52, height: 52)
+                Text(String(user.username.prefix(1)).uppercased())
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            Text(user.username)
+                .font(.system(size: 16, weight: .semibold))
+
+            Spacer()
+
+            switch status {
+            case .none:
+                EmptyView()
+            case .requested:
+                Text("Requested")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(UIColor.systemGray5))
+                    .cornerRadius(8)
+            case .friends:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(UIColor.systemBackground))
+    }
+
+    func avatarColor(for name: String) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
+        return colors[abs(name.hashValue) % colors.count]
+    }
+}
+
+// MARK: - User Profile Sheet
+struct UserProfileSheet: View {
+    let user: AppUser
+    let onStatusChange: (FriendRequestStatus) -> Void
+
+    @State private var status: FriendRequestStatus = .none
+    @State private var isLoadingStatus = true
+    @State private var isSending = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(avatarColor(for: user.username))
+                    .frame(width: 100, height: 100)
+                Text(String(user.username.prefix(1)).uppercased())
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .padding(.top, 30)
+
+            Text(user.username)
+                .font(.title2)
+                .fontWeight(.bold)
+
+            HStack(spacing: 6) {
+                Image(systemName: "figure.walk")
+                    .foregroundColor(.green)
+                Text("Step Score: \(user.stepScore)")
+                    .font(.headline)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(Color(UIColor.systemGray6))
+            .cornerRadius(10)
+
+            Button(action: sendRequest) {
+                Group {
+                    if isSending || isLoadingStatus {
+                        ProgressView().tint(status == .none ? .white : .secondary)
+                    } else {
+                        HStack {
+                            Image(systemName: buttonIcon)
+                            Text(buttonLabel)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(status == .none ? Color.blue : Color(UIColor.systemGray4))
+                .foregroundColor(status == .none ? .white : .secondary)
+                .cornerRadius(12)
+            }
+            .disabled(status != .none || isSending || isLoadingStatus)
+            .padding(.horizontal, 30)
+
+            Spacer()
+        }
+        .task {
+            status = await FriendService.shared.status(for: user.id)
+            isLoadingStatus = false
+        }
+    }
+
+    private var buttonIcon: String {
+        switch status {
+        case .none:     return "person.badge.plus"
+        case .requested: return "clock"
+        case .friends:  return "checkmark.circle.fill"
+        }
+    }
+
+    private var buttonLabel: String {
+        switch status {
+        case .none:     return "Add Friend"
+        case .requested: return "Request Sent"
+        case .friends:  return "Friends"
+        }
+    }
+
+    private func sendRequest() {
+        guard status == .none else { return }
+        isSending = true
+        Task {
+            try? await FriendService.shared.sendRequest(to: user.id)
+            status = .requested
+            onStatusChange(.requested)
+            isSending = false
+        }
+    }
+
+    func avatarColor(for name: String) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
+        return colors[abs(name.hashValue) % colors.count]
     }
 }
 
