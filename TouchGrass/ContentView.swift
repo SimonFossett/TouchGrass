@@ -11,10 +11,18 @@ import MapKit
 // MARK: - Main Content View
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
+    private let firebase = FirebaseManager.shared
 
     var body: some View {
+        if firebase.isAuthenticated {
+            mainApp
+        } else {
+            AuthView()
+        }
+    }
+
+    var mainApp: some View {
         VStack(spacing: 0) {
-            // Main content area
             ZStack {
                 switch selectedTab {
                 case .home:
@@ -243,37 +251,10 @@ struct FriendDetailSheet: View {
 // MARK: - Placeholder Screens
 struct SearchView: View {
     @State private var searchText = ""
-    @State private var requestStatuses: [UUID: FriendRequestStatus] = [:]
-    @State private var selectedUser: PlatformUser? = nil
-
-    // Mock platform users — replace with backend fetch
-    let allUsers: [PlatformUser] = [
-        PlatformUser(username: "alex_walks",    stepScore: 12450),
-        PlatformUser(username: "brianna_fit",   stepScore: 8920),
-        PlatformUser(username: "carlos_runner", stepScore: 21300),
-        PlatformUser(username: "dana_steps",    stepScore: 5670),
-        PlatformUser(username: "eli_outdoor",   stepScore: 9800),
-        PlatformUser(username: "fiona_hike",    stepScore: 14200),
-        PlatformUser(username: "george_trek",   stepScore: 3450),
-        PlatformUser(username: "hana_walks",    stepScore: 7800),
-        PlatformUser(username: "ivan_run",      stepScore: 18900),
-        PlatformUser(username: "julia_pace",    stepScore: 6100),
-        PlatformUser(username: "kevin_steps",   stepScore: 11200),
-        PlatformUser(username: "laura_hike",    stepScore: 9300),
-        PlatformUser(username: "mike_outdoor",  stepScore: 4500),
-        PlatformUser(username: "nina_trek",     stepScore: 16700),
-        PlatformUser(username: "oscar_run",     stepScore: 7200),
-        PlatformUser(username: "paula_fit",     stepScore: 13800),
-        PlatformUser(username: "quinn_walk",    stepScore: 5500),
-        PlatformUser(username: "rosa_steps",    stepScore: 8100),
-        PlatformUser(username: "simon_fossett", stepScore: 9500),
-        PlatformUser(username: "tara_hike",     stepScore: 11900),
-    ]
-
-    var filteredUsers: [PlatformUser] {
-        guard !searchText.isEmpty else { return [] }
-        return allUsers.filter { $0.username.lowercased().hasPrefix(searchText.lowercased()) }
-    }
+    @State private var results: [AppUser] = []
+    @State private var requestStatuses: [String: FriendRequestStatus] = [:]
+    @State private var selectedUser: AppUser? = nil
+    @State private var isLoading = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -308,7 +289,11 @@ struct SearchView: View {
                 }
                 .padding()
                 Spacer()
-            } else if filteredUsers.isEmpty {
+            } else if isLoading {
+                Spacer()
+                ProgressView()
+                Spacer()
+            } else if results.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
                     Image(systemName: "person.slash.fill")
@@ -323,7 +308,7 @@ struct SearchView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(filteredUsers) { user in
+                        ForEach(results) { user in
                             UserSearchRow(user: user, status: requestStatuses[user.id] ?? .none)
                                 .contentShape(Rectangle())
                                 .onTapGesture { selectedUser = user }
@@ -334,12 +319,20 @@ struct SearchView: View {
                 }
             }
         }
+        // Re-runs automatically when searchText changes; cancels the previous task
+        .task(id: searchText) {
+            guard !searchText.isEmpty else { results = []; return }
+            // 300ms debounce
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            isLoading = true
+            results = (try? await UserService.shared.searchUsers(query: searchText)) ?? []
+            isLoading = false
+        }
         .sheet(item: $selectedUser) { user in
-            UserProfileSheet(
-                user: user,
-                status: requestStatuses[user.id] ?? .none,
-                onAddFriend: { requestStatuses[user.id] = .requested }
-            )
+            UserProfileSheet(user: user) { newStatus in
+                requestStatuses[user.id] = newStatus
+            }
             .presentationDetents([.medium])
         }
     }
@@ -351,20 +344,14 @@ struct MapView: View {
     }
 }
 
-// MARK: - Platform User Model
-struct PlatformUser: Identifiable {
-    let id = UUID()
-    let username: String
-    let stepScore: Int
-}
-
+// MARK: - Friend Request Status
 enum FriendRequestStatus {
     case none, requested, friends
 }
 
 // MARK: - User Search Row
 struct UserSearchRow: View {
-    let user: PlatformUser
+    let user: AppUser
     let status: FriendRequestStatus
 
     var body: some View {
@@ -412,9 +399,12 @@ struct UserSearchRow: View {
 
 // MARK: - User Profile Sheet
 struct UserProfileSheet: View {
-    let user: PlatformUser
-    let status: FriendRequestStatus
-    let onAddFriend: () -> Void
+    let user: AppUser
+    let onStatusChange: (FriendRequestStatus) -> Void
+
+    @State private var status: FriendRequestStatus = .none
+    @State private var isLoadingStatus = true
+    @State private var isSending = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -443,12 +433,16 @@ struct UserProfileSheet: View {
             .background(Color(UIColor.systemGray6))
             .cornerRadius(10)
 
-            Button(action: {
-                if status == .none { onAddFriend() }
-            }) {
-                HStack {
-                    Image(systemName: status == .none ? "person.badge.plus" : "clock")
-                    Text(status == .none ? "Add Friend" : "Request Sent")
+            Button(action: sendRequest) {
+                Group {
+                    if isSending || isLoadingStatus {
+                        ProgressView().tint(status == .none ? .white : .secondary)
+                    } else {
+                        HStack {
+                            Image(systemName: buttonIcon)
+                            Text(buttonLabel)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -456,10 +450,41 @@ struct UserProfileSheet: View {
                 .foregroundColor(status == .none ? .white : .secondary)
                 .cornerRadius(12)
             }
-            .disabled(status != .none)
+            .disabled(status != .none || isSending || isLoadingStatus)
             .padding(.horizontal, 30)
 
             Spacer()
+        }
+        .task {
+            status = await FriendService.shared.status(for: user.id)
+            isLoadingStatus = false
+        }
+    }
+
+    private var buttonIcon: String {
+        switch status {
+        case .none:     return "person.badge.plus"
+        case .requested: return "clock"
+        case .friends:  return "checkmark.circle.fill"
+        }
+    }
+
+    private var buttonLabel: String {
+        switch status {
+        case .none:     return "Add Friend"
+        case .requested: return "Request Sent"
+        case .friends:  return "Friends"
+        }
+    }
+
+    private func sendRequest() {
+        guard status == .none else { return }
+        isSending = true
+        Task {
+            try? await FriendService.shared.sendRequest(to: user.id)
+            status = .requested
+            onStatusChange(.requested)
+            isSending = false
         }
     }
 
