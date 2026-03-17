@@ -107,7 +107,7 @@
 			mainGroup = BA1C51F72F6729F9004640E4;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				BA1C53002F6730FF004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				BA1C52D72F69DB94004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BA1C52012F6729F9004640E4 /* Products */;
@@ -139,31 +139,21 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		BA1C53002F6730FF004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 11.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		BA1C53012F6730FF004640E4 /* FirebaseCore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BA1C53002F6730FF004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			package = BA1C52D72F69DB94004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCore;
 		};
 		BA1C53022F6730FF004640E4 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BA1C53002F6730FF004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			package = BA1C52D72F69DB94004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
 		};
 		BA1C53032F6730FF004640E4 /* FirebaseFirestore */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BA1C53002F6730FF004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			package = BA1C52D72F69DB94004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
 		};
 /* End XCSwiftPackageProductDependency section */
@@ -376,6 +366,17 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BA1C52D72F69DB94004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.11.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 	};
 	rootObject = BA1C51F82F6729F9004640E4 /* Project object */;
 }
