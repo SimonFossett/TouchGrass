@@ -65,26 +65,48 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
 // MARK: - Map View
 struct MapScreen: View {
     @State private var viewModel = MapViewModel()
+    @State private var stepManager = StepCounterManager()
 
     var body: some View {
-        Map(position: $viewModel.position) {
-            UserAnnotation()
-            ForEach(viewModel.friends) { friend in
-                Annotation(friend.name, coordinate: friend.coordinate) {
-                    VStack {
-                        Image(systemName: "person.circle.fill")
-                            .foregroundColor(.blue)
-                            .font(.title)
-                        Text(friend.name)
-                            .font(.caption)
-                            .padding(2)
-                            .background(Color.white.opacity(0.8))
-                            .cornerRadius(5)
+        ZStack {
+            Map(position: $viewModel.position) {
+                UserAnnotation()
+                ForEach(viewModel.friends) { friend in
+                    Annotation(friend.name, coordinate: friend.coordinate) {
+                        VStack {
+                            Image(systemName: "person.circle.fill")
+                                .foregroundColor(.blue)
+                                .font(.title)
+                            Text(friend.name)
+                                .font(.caption)
+                                .padding(2)
+                                .background(Color.white.opacity(0.8))
+                                .cornerRadius(5)
+                        }
                     }
                 }
             }
+            .edgesIgnoringSafeArea(.all)
+
+            // Step counter overlay
+            VStack {
+                HStack {
+                    Spacer()
+                    HStack(spacing: 6) {
+                        Image(systemName: "figure.walk")
+                            .foregroundColor(.green)
+                        Text("Steps: \(stepManager.steps)")
+                            .fontWeight(.semibold)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(12)
+                    .padding()
+                }
+                Spacer()
+            }
         }
-        .edgesIgnoringSafeArea(.all)
         .onAppear {
             // You can later fetch friend locations from your server here
         }
