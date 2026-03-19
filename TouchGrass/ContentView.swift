@@ -82,14 +82,8 @@ struct TabBarButton: View {
 // MARK: - Home View
 struct HomeView: View {
     @State private var searchText: String = ""
-    @State private var friends: [Friend] = [
-        Friend(name: "Alice", coordinate: CLLocationCoordinate2D(latitude: 37.7799, longitude: -122.4294), stepScore: 4820),
-        Friend(name: "Bob", coordinate: CLLocationCoordinate2D(latitude: 37.7699, longitude: -122.4094), stepScore: 3150),
-        Friend(name: "Charlie", coordinate: CLLocationCoordinate2D(latitude: 37.7649, longitude: -122.4194), stepScore: 7230),
-        Friend(name: "Diana", coordinate: CLLocationCoordinate2D(latitude: 37.7849, longitude: -122.4094), stepScore: 2100),
-        Friend(name: "Eve", coordinate: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4394), stepScore: 5670),
-        Friend(name: "Simon", coordinate: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4294), stepScore: 9500),
-    ]
+    @State private var friends: [Friend] = []
+    @State private var isLoadingFriends = true
     @State private var selectedFriend: Friend? = nil
     @State private var showingFriendDetail = false
     @State private var showProfileMenu = false
@@ -162,48 +156,70 @@ struct HomeView: View {
             .background(Color(UIColor.systemGray5))
 
             // Friends list
-            ScrollView {
-                LazyVStack(spacing: 0) {
+            if isLoadingFriends {
+                Spacer()
+                ProgressView()
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
 
-                    // MARK: Pending friend requests (always at top)
-                    if !pendingRequests.isEmpty {
-                        SectionHeader(title: "Friend Requests")
-                        ForEach(pendingRequests) { user in
-                            FriendRequestRow(user: user) {
-                                acceptRequest(user)
-                            } onDecline: {
-                                declineRequest(user)
+                        // MARK: Pending friend requests (always at top)
+                        if !pendingRequests.isEmpty {
+                            SectionHeader(title: "Friend Requests")
+                            ForEach(pendingRequests) { user in
+                                FriendRequestRow(user: user) {
+                                    acceptRequest(user)
+                                } onDecline: {
+                                    declineRequest(user)
+                                }
+                                Divider().padding(.leading, 74)
                             }
-                            Divider().padding(.leading, 74)
+                            SectionHeader(title: "Friends")
                         }
-                        SectionHeader(title: "Friends")
-                    }
 
-                    // MARK: Regular friends list
-                    ForEach(filteredFriends) { friend in
-                        FriendRow(friend: friend)
-                            .contentShape(Rectangle())
-                            .onLongPressGesture(minimumDuration: 0.5) {
-                                selectedFriend = friend
-                                showingFriendDetail = true
+                        // MARK: Regular friends list
+                        if friends.isEmpty {
+                            VStack(spacing: 12) {
+                                Image(systemName: "person.2.fill")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.gray.opacity(0.4))
+                                Text("No friends yet")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text("Search for users to add friends")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
-                        Divider()
-                            .padding(.leading, 74)
+                            .padding(.top, 60)
+                        } else {
+                            ForEach(filteredFriends) { friend in
+                                FriendRow(friend: friend)
+                                    .contentShape(Rectangle())
+                                    .onLongPressGesture(minimumDuration: 0.5) {
+                                        selectedFriend = friend
+                                        showingFriendDetail = true
+                                    }
+                                Divider()
+                                    .padding(.leading, 74)
+                            }
+                        }
                     }
                 }
-            }
-            .refreshable {
-                await loadPendingRequests()
+                .refreshable {
+                    await loadFriendsAndRequests()
+                }
             }
         }
         .task {
-            await loadPendingRequests()
+            await loadFriendsAndRequests()
         }
         .sheet(isPresented: $showingFriendDetail) {
             if let friend = selectedFriend,
                let idx = friends.firstIndex(where: { $0.id == friend.id }) {
                 FriendDetailSheet(friend: friends[idx]) {
                     friends[idx].isPinned.toggle()
+                    persistPin(uid: friends[idx].uid, isPinned: friends[idx].isPinned)
                     showingFriendDetail = false
                 }
                 .presentationDetents([.medium])
@@ -216,6 +232,16 @@ struct HomeView: View {
 
     // MARK: - Helpers
 
+    private func loadFriendsAndRequests() async {
+        isLoadingFriends = true
+        async let friendsTask   = LeaderboardService.shared.fetchFriendsForHome()
+        async let requestsTask  = FriendService.shared.incomingRequests()
+        let (loaded, requests)  = await (friendsTask, (try? requestsTask) ?? [])
+        friends          = loaded
+        pendingRequests  = requests
+        isLoadingFriends = false
+    }
+
     private func loadPendingRequests() async {
         pendingRequests = (try? await FriendService.shared.incomingRequests()) ?? []
     }
@@ -224,11 +250,12 @@ struct HomeView: View {
         Task {
             try? await FriendService.shared.acceptRequest(from: user.id)
             pendingRequests.removeAll { $0.id == user.id }
-            // Insert the new friend in alphabetical order
             let newFriend = Friend(
+                uid: user.id,
                 name: user.username,
                 coordinate: .init(latitude: 0, longitude: 0),
-                stepScore: user.stepScore
+                stepScore: user.stepScore,
+                streak: user.dailyStreak
             )
             let insertIdx = friends.firstIndex { $0.name.lowercased() > user.username.lowercased() }
                 ?? friends.endIndex
@@ -241,6 +268,13 @@ struct HomeView: View {
             try? await FriendService.shared.denyRequest(from: user.id)
             pendingRequests.removeAll { $0.id == user.id }
         }
+    }
+
+    private func persistPin(uid: String, isPinned: Bool) {
+        guard !uid.isEmpty else { return }
+        var pinned = Set(UserDefaults.standard.stringArray(forKey: "pinnedFriendIDs") ?? [])
+        if isPinned { pinned.insert(uid) } else { pinned.remove(uid) }
+        UserDefaults.standard.set(Array(pinned), forKey: "pinnedFriendIDs")
     }
 }
 
@@ -349,6 +383,11 @@ struct FriendRow: View {
             }
 
             Spacer()
+
+            // Streak fire icon
+            if friend.streak > 0 {
+                StreakBadge(streak: friend.streak)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -358,6 +397,25 @@ struct FriendRow: View {
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
+    }
+}
+
+// MARK: - Streak Badge
+
+struct StreakBadge: View {
+    let streak: Int
+
+    var body: some View {
+        ZStack {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 30))
+                .foregroundColor(.orange)
+            Text("\(streak)")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.white)
+                .offset(y: 4)
+        }
+        .frame(width: 32, height: 36)
     }
 }
 
@@ -667,8 +725,11 @@ struct UserProfileSheet: View {
 
 struct ProfileView: View {
     private let profileManager = ProfileImageManager.shared
-    private let stepManager = StepCounterManager.shared
+    private let stepManager    = StepCounterManager.shared
     @State private var username: String = ""
+    @State private var leaderboardType: LeaderboardType = .daily
+    @State private var leaderboardEntries: [LeaderboardEntry] = []
+    @State private var isLoadingLeaderboard = false
 
     var body: some View {
         ScrollView {
@@ -718,7 +779,53 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 24)
 
-                Spacer(minLength: 0)
+                // MARK: Leaderboard section
+                VStack(spacing: 0) {
+                    // Dropdown picker
+                    HStack {
+                        Text("\(leaderboardType.rawValue) Leaderboard")
+                            .font(.headline)
+                        Spacer()
+                        Picker("Leaderboard", selection: $leaderboardType) {
+                            ForEach(LeaderboardType.allCases) { type in
+                                Text(type.rawValue).tag(type)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 4)
+                    .padding(.bottom, 12)
+
+                    if isLoadingLeaderboard {
+                        ProgressView().padding(.vertical, 30)
+                    } else if leaderboardEntries.isEmpty {
+                        Text("Add friends to see the leaderboard")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.vertical, 30)
+                    } else {
+                        let sorted = leaderboardEntries.sorted {
+                            $0.value(for: leaderboardType) > $1.value(for: leaderboardType)
+                        }
+                        VStack(spacing: 0) {
+                            ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, entry in
+                                LeaderboardRowView(
+                                    placing: idx + 1,
+                                    entry: entry,
+                                    type: leaderboardType
+                                )
+                                if idx < sorted.count - 1 {
+                                    Divider().padding(.leading, 60)
+                                }
+                            }
+                        }
+                        .background(Color(UIColor.systemBackground))
+                        .cornerRadius(14)
+                        .padding(.horizontal, 24)
+                    }
+                }
+                .padding(.bottom, 24)
             }
             .frame(maxWidth: .infinity)
         }
@@ -727,6 +834,93 @@ struct ProfileView: View {
                 username = user.username
             }
         }
+        .task(id: leaderboardType) {
+            isLoadingLeaderboard = true
+            leaderboardEntries = (try? await LeaderboardService.shared.fetchEntries()) ?? []
+            isLoadingLeaderboard = false
+            // Update streaks in background — reflected on next load
+            Task { await LeaderboardService.shared.updateStreaksIfNeeded(entries: leaderboardEntries) }
+        }
+    }
+}
+
+// MARK: - Leaderboard Row
+
+struct LeaderboardRowView: View {
+    let placing: Int
+    let entry: LeaderboardEntry
+    let type: LeaderboardType
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Ordinal placing
+            Text(ordinal(placing))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(placingColor)
+                .frame(width: 34, alignment: .center)
+
+            // Avatar
+            ZStack {
+                Circle()
+                    .fill(avatarColor(for: entry.username))
+                    .frame(width: 42, height: 42)
+                Text(String(entry.username.prefix(1)).uppercased())
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            // Name
+            Text(entry.isCurrentUser ? "You" : entry.username)
+                .font(.system(size: 15, weight: entry.isCurrentUser ? .bold : .regular))
+                .lineLimit(1)
+
+            Spacer()
+
+            // Streak badge
+            let streak = entry.streak(for: type)
+            if streak > 0 {
+                StreakBadge(streak: streak)
+            }
+
+            // Value
+            Text(entry.value(for: type).formatted())
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.secondary)
+                .monospacedDigit()
+                .frame(minWidth: 60, alignment: .trailing)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(entry.isCurrentUser ? Color.blue.opacity(0.06) : Color.clear)
+    }
+
+    private var placingColor: Color {
+        switch placing {
+        case 1:  return Color(red: 1.0, green: 0.84, blue: 0.0)   // gold
+        case 2:  return Color(white: 0.6)                           // silver
+        case 3:  return Color(red: 0.80, green: 0.50, blue: 0.20)  // bronze
+        default: return .secondary
+        }
+    }
+
+    private func ordinal(_ n: Int) -> String {
+        let ones = n % 10, tens = (n % 100) / 10
+        let suffix: String
+        if tens == 1 { suffix = "th" }
+        else {
+            switch ones {
+            case 1: suffix = "st"
+            case 2: suffix = "nd"
+            case 3: suffix = "rd"
+            default: suffix = "th"
+            }
+        }
+        return "\(n)\(suffix)"
+    }
+
+    private func avatarColor(for name: String) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
+        return colors[abs(name.hashValue) % colors.count]
     }
 }
 

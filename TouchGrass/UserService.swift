@@ -8,9 +8,12 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct AppUser: Identifiable {
-    let id: String   // Firebase UID
+    let id: String      // Firebase UID
     let username: String
     var stepScore: Int
+    var dailySteps: Int = 0
+    var dailyStreak: Int = 0
+    var overallStreak: Int = 0
 }
 
 class UserService {
@@ -48,13 +51,25 @@ class UserService {
         guard let uid = Auth.auth().currentUser?.uid else { return nil }
         let doc = try await db.collection("users").document(uid).getDocument()
         guard let username = doc.data()?["username"] as? String else { return nil }
-        let stepScore = doc.data()?["stepScore"] as? Int ?? 0
-        return AppUser(id: uid, username: username, stepScore: stepScore)
+        return AppUser(
+            id: uid,
+            username: username,
+            stepScore: doc.data()?["stepScore"] as? Int ?? 0,
+            dailySteps: doc.data()?["dailySteps"] as? Int ?? 0,
+            dailyStreak: doc.data()?["dailyStreak"] as? Int ?? 0,
+            overallStreak: doc.data()?["overallStreak"] as? Int ?? 0
+        )
     }
 
     /// Pushes the user's latest step count up to Firestore so friends can see it.
     func updateStepScore(_ steps: Int) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         try? await db.collection("users").document(uid).updateData(["stepScore": steps])
+    }
+
+    /// Pushes the user's daily step count to Firestore for leaderboard comparisons.
+    func updateDailySteps(_ steps: Int) async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        try? await db.collection("users").document(uid).updateData(["dailySteps": steps])
     }
 }
