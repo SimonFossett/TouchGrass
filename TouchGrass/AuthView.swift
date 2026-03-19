@@ -12,6 +12,7 @@ struct AuthView: View {
     @State private var username = ""
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var showPasswordReset = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -52,6 +53,17 @@ struct AuthView: View {
                     .padding()
                     .background(Color(UIColor.systemGray6))
                     .cornerRadius(10)
+
+                if !isSignUp {
+                    HStack {
+                        Spacer()
+                        Button("Forgot Password?") {
+                            showPasswordReset = true
+                        }
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                    }
+                }
             }
             .padding(.horizontal, 24)
 
@@ -96,6 +108,9 @@ struct AuthView: View {
 
             Spacer()
         }
+        .sheet(isPresented: $showPasswordReset) {
+            PasswordResetView(prefillEmail: email)
+        }
     }
 
     private func submit() {
@@ -133,6 +148,106 @@ struct AuthView: View {
                 } else {
                     try await FirebaseManager.shared.signIn(email: email, password: password)
                 }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isLoading = false
+        }
+    }
+}
+
+// MARK: - Password Reset Sheet
+
+struct PasswordResetView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var email: String
+    @State private var isLoading = false
+    @State private var didSend = false
+    @State private var errorMessage = ""
+
+    init(prefillEmail: String) {
+        _email = State(initialValue: prefillEmail)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer()
+
+                Image(systemName: "lock.rotation")
+                    .font(.system(size: 60))
+                    .foregroundColor(.green)
+
+                VStack(spacing: 8) {
+                    Text("Reset Password")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Text("Enter your email and we'll send you a link to reset your password.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+
+                if didSend {
+                    Label("Check your email for a reset link.", systemImage: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.subheadline)
+                        .padding(.horizontal, 24)
+                } else {
+                    VStack(spacing: 14) {
+                        TextField("Email", text: $email)
+                            .keyboardType(.emailAddress)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .padding()
+                            .background(Color(UIColor.systemGray6))
+                            .cornerRadius(10)
+
+                        if !errorMessage.isEmpty {
+                            Text(errorMessage)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                                .multilineTextAlignment(.center)
+                        }
+
+                        Button(action: sendReset) {
+                            Group {
+                                if isLoading {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Text("Send Reset Email")
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                        }
+                        .background(Color.green)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                        .disabled(isLoading || email.isEmpty)
+                    }
+                    .padding(.horizontal, 24)
+                }
+
+                Spacer()
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func sendReset() {
+        errorMessage = ""
+        isLoading = true
+        Task {
+            do {
+                try await FirebaseManager.shared.sendPasswordReset(email: email.trimmingCharacters(in: .whitespaces))
+                didSend = true
             } catch {
                 errorMessage = error.localizedDescription
             }

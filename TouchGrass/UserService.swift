@@ -21,6 +21,12 @@ class UserService {
     static let shared = UserService()
     private let db = Firestore.firestore()
 
+    // Minimum interval between Firestore writes for step fields, to prevent
+    // automated spoofing via rapid successive calls.
+    private let stepWriteInterval: TimeInterval = 30
+    private var lastStepScoreWrite: Date = .distantPast
+    private var lastDailyStepsWrite: Date = .distantPast
+
     private init() {}
 
     /// Search platform users whose username starts with `query` (case-insensitive).
@@ -63,20 +69,26 @@ class UserService {
     }
 
     /// Pushes the user's latest step count up to Firestore so friends can see it.
+    /// Writes are throttled to at most once every 30 seconds.
     func updateStepScore(_ steps: Int) async {
+        guard Date().timeIntervalSince(lastStepScoreWrite) >= stepWriteInterval else { return }
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do {
             try await db.collection("users").document(uid).updateData(["stepScore": steps])
+            lastStepScoreWrite = Date()
         } catch {
             print("[UserService] updateStepScore failed: \(error)")
         }
     }
 
     /// Pushes the user's daily step count to Firestore for leaderboard comparisons.
+    /// Writes are throttled to at most once every 30 seconds.
     func updateDailySteps(_ steps: Int) async {
+        guard Date().timeIntervalSince(lastDailyStepsWrite) >= stepWriteInterval else { return }
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do {
             try await db.collection("users").document(uid).updateData(["dailySteps": steps])
+            lastDailyStepsWrite = Date()
         } catch {
             print("[UserService] updateDailySteps failed: \(error)")
         }

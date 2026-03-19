@@ -1,7 +1,7 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { initializeApp } = require("firebase-admin/app");
-const { getFirestore } = require("firebase-admin/firestore");
+const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
 initializeApp();
@@ -16,6 +16,70 @@ async function sendNotification(token, title, body) {
     console.error("[FCM] send error:", e.message);
   }
 }
+
+// ── 0. Step-score rate-limit / anti-spoof ────────────────────────────────────
+// Fires on every user-document write. Validates that stepScore and dailySteps
+// didn't jump by more than a physically possible amount since the last write.
+//
+// Algorithm:
+//   maxAllowed = min(elapsedSeconds * 10 steps/sec, 50 000 steps)
+//   (10 steps/sec ≈ 3× the world-record walking pace, giving a generous buffer)
+// When elapsed time is unknown (first ever write) we allow up to 50 000 steps.
+//
+// On a violation the field is reverted to its previous value and a warning is
+// logged.  The server-set *LastValidated timestamps are what make this
+// tamper-proof – clients cannot forge them.
+exports.validateStepUpdate = onDocumentUpdated("users/{uid}", async (event) => {
+  const before = event.data?.before?.data();
+  const after  = event.data?.after?.data();
+  if (!before || !after) return;
+
+  const uid = event.params.uid;
+  const ref = event.data.after.ref;
+  const now = Date.now();
+
+  // Max steps a human can accumulate per second (very generous upper bound).
+  const MAX_STEPS_PER_SECOND = 10;
+  // Hard per-update cap regardless of elapsed time (~50 000 steps ≈ a full
+  // ultramarathon day; impossible to accumulate between two app writes).
+  const MAX_STEPS_PER_UPDATE = 50000;
+
+  const updates = {};
+
+  function checkField(field, lastUpdatedField) {
+    const oldVal = before[field] ?? 0;
+    const newVal = after[field]  ?? 0;
+    if (newVal <= oldVal) return; // decreases and no-ops are fine
+
+    const increase   = newVal - oldVal;
+    const lastMs     = before[lastUpdatedField]?.toMillis?.() ?? null;
+    const elapsedSec = lastMs !== null
+      ? Math.max(1, (now - lastMs) / 1000)
+      : null; // unknown — first write
+
+    const maxAllowed = elapsedSec !== null
+      ? Math.min(elapsedSec * MAX_STEPS_PER_SECOND, MAX_STEPS_PER_UPDATE)
+      : MAX_STEPS_PER_UPDATE;
+
+    if (increase > maxAllowed) {
+      updates[field] = oldVal; // revert
+      console.warn(
+        `[RateLimit] ${uid} ${field} spike: +${increase} steps` +
+        (elapsedSec !== null ? ` in ${elapsedSec.toFixed(0)}s` : " (first write)") +
+        ` (max allowed: ${Math.round(maxAllowed)})`
+      );
+    } else {
+      updates[lastUpdatedField] = FieldValue.serverTimestamp();
+    }
+  }
+
+  checkField("stepScore",  "stepScoreLastValidated");
+  checkField("dailySteps", "dailyStepsLastValidated");
+
+  if (Object.keys(updates).length > 0) {
+    await ref.update(updates);
+  }
+});
 
 // ── 1. Friend request notification ───────────────────────────────────────────
 // Fires when a new friendRequest document is created with status "pending".
