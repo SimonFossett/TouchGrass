@@ -74,6 +74,15 @@ class UserService {
         try? await db.collection("users").document(uid).updateData(["dailySteps": steps])
     }
 
+    /// Returns true if the given username is already in use by another account.
+    func isUsernameTaken(_ username: String) async throws -> Bool {
+        let snapshot = try await db.collection("users")
+            .whereField("username", isEqualTo: username)
+            .limit(to: 1)
+            .getDocuments()
+        return !snapshot.isEmpty
+    }
+
     /// Writes the user's current GPS coordinates to Firestore so friends can see them on the map.
     func updateLocation(_ coordinate: CLLocationCoordinate2D) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }

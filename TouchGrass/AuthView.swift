@@ -100,16 +100,34 @@ struct AuthView: View {
 
     private func submit() {
         errorMessage = ""
+
+        if isSignUp {
+            let trimmed = username.trimmingCharacters(in: .whitespaces).lowercased()
+            // Instant client-side checks before hitting the network
+            guard trimmed.count >= 3 else {
+                errorMessage = "Username must be at least 3 characters."
+                return
+            }
+            guard trimmed.count <= 20 else {
+                errorMessage = "Username must be 20 characters or fewer."
+                return
+            }
+            let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+            guard trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+                errorMessage = "Username can only contain letters, numbers, and underscores."
+                return
+            }
+            guard password.count >= 6 else {
+                errorMessage = "Password must be at least 6 characters."
+                return
+            }
+        }
+
         isLoading = true
         Task {
             do {
                 if isSignUp {
                     let trimmed = username.trimmingCharacters(in: .whitespaces).lowercased()
-                    guard !trimmed.isEmpty else {
-                        errorMessage = "Username is required"
-                        isLoading = false
-                        return
-                    }
                     try await FirebaseManager.shared.signUp(
                         email: email, password: password, username: trimmed)
                 } else {
