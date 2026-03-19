@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import CoreLocation
 import FirebaseAuth
 import FirebaseFirestore
 
@@ -71,5 +72,14 @@ class UserService {
     func updateDailySteps(_ steps: Int) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         try? await db.collection("users").document(uid).updateData(["dailySteps": steps])
+    }
+
+    /// Writes the user's current GPS coordinates to Firestore so friends can see them on the map.
+    func updateLocation(_ coordinate: CLLocationCoordinate2D) async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        try? await db.collection("users").document(uid).updateData([
+            "latitude": coordinate.latitude,
+            "longitude": coordinate.longitude
+        ])
     }
 }
