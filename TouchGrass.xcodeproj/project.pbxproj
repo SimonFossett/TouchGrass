@@ -12,6 +12,7 @@
 		BA1C53062F6730FF004640E4 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = BA1C53032F6730FF004640E4 /* FirebaseFirestore */; };
 		BA1C53072F6730FF004640E4 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = BA1C53082F6730FF004640E4 /* FirebaseStorage */; };
 		BA1C530B2F6730FF004640E4 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = BA1C530C2F6730FF004640E4 /* FirebaseMessaging */; };
+		BA1C530D2F6730FF004640E4 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = BA1C530E2F6730FF004640E4 /* FirebaseFunctions */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 				BA1C53062F6730FF004640E4 /* FirebaseFirestore in Frameworks */,
 				BA1C53072F6730FF004640E4 /* FirebaseStorage in Frameworks */,
 				BA1C530B2F6730FF004640E4 /* FirebaseMessaging in Frameworks */,
+				BA1C530D2F6730FF004640E4 /* FirebaseFunctions in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +85,7 @@
 				BA1C53032F6730FF004640E4 /* FirebaseFirestore */,
 				BA1C53082F6730FF004640E4 /* FirebaseStorage */,
 				BA1C530C2F6730FF004640E4 /* FirebaseMessaging */,
+				BA1C530E2F6730FF004640E4 /* FirebaseFunctions */,
 			);
 			productName = TouchGrass;
 			productReference = BA1C52002F6729F9004640E4 /* TouchGrass.app */;
@@ -390,6 +393,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BA1C52D72F69DB94004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseMessaging;
+		};
+		BA1C530E2F6730FF004640E4 /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BA1C52D72F69DB94004640E4 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,8 +1,18 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const nodemailer = require("nodemailer");
+
+// SMTP credentials — set once with:
+//   firebase functions:secrets:set SMTP_USER
+//   firebase functions:secrets:set SMTP_PASS
+const smtpUser = defineSecret("SMTP_USER");
+const smtpPass = defineSecret("SMTP_PASS");
 
 initializeApp();
 const db = getFirestore();
@@ -16,6 +26,170 @@ async function sendNotification(token, title, body) {
     console.error("[FCM] send error:", e.message);
   }
 }
+
+// ── Password reset email ──────────────────────────────────────────────────────
+// Callable from the iOS app.  Generates a Firebase Auth password-reset link
+// and delivers a branded TouchGrass email via SMTP (configured via secrets).
+//
+// Set credentials before deploying:
+//   firebase functions:secrets:set SMTP_USER   (e.g. noreply@yourdomain.com)
+//   firebase functions:secrets:set SMTP_PASS   (app password / API key)
+//
+// By default the function uses Gmail's SMTP.  Change `host`/`port`/`secure`
+// in the transporter config below if you use a different provider
+// (e.g. SendGrid: host smtp.sendgrid.net, port 587).
+exports.sendPasswordResetEmail = onCall(
+  { secrets: [smtpUser, smtpPass] },
+  async (request) => {
+    const email = (request.data?.email || "").trim().toLowerCase();
+    if (!email) throw new HttpsError("invalid-argument", "Email is required.");
+
+    // Generate the reset link via Firebase Admin Auth.
+    // We catch user-not-found and return success anyway so callers can't
+    // enumerate which emails are registered.
+    let resetLink;
+    try {
+      resetLink = await getAuth().generatePasswordResetLink(email);
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        // Silently succeed — don't reveal whether the address is registered.
+        return { success: true };
+      }
+      console.error("[PasswordReset] generatePasswordResetLink error:", err);
+      throw new HttpsError("internal", "Failed to generate reset link.");
+    }
+
+    // ── HTML email template ──────────────────────────────────────────────────
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Reset Your TouchGrass Password</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#f4f4f5;padding:48px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:560px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background-color:#16a34a;padding:36px 40px;text-align:center;">
+              <div style="font-size:52px;line-height:1;margin-bottom:10px;">🚶</div>
+              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:700;letter-spacing:-0.3px;">TouchGrass</h1>
+              <p style="margin:6px 0 0;color:#bbf7d0;font-size:14px;">Get outside. Stay active.</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px 40px 32px;">
+              <h2 style="margin:0 0 12px;color:#111827;font-size:20px;font-weight:600;">Reset your password</h2>
+              <p style="margin:0 0 8px;color:#374151;font-size:15px;line-height:1.65;">
+                Hi there,
+              </p>
+              <p style="margin:0 0 28px;color:#374151;font-size:15px;line-height:1.65;">
+                We received a request to reset the password associated with this email address. If you made this request, click the button below to choose a new password.
+              </p>
+
+              <!-- CTA button -->
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td align="center" style="padding-bottom:32px;">
+                    <a href="${resetLink}"
+                       style="display:inline-block;background-color:#16a34a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 36px;border-radius:10px;letter-spacing:0.1px;">
+                      Reset My Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 6px;color:#6b7280;font-size:13px;line-height:1.6;">
+                Button not working? Copy and paste this link into your browser:
+              </p>
+              <p style="margin:0 0 32px;font-size:12px;word-break:break-all;">
+                <a href="${resetLink}" style="color:#16a34a;text-decoration:underline;">${resetLink}</a>
+              </p>
+
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;">
+
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td width="20" valign="top" style="padding-top:1px;">
+                    <span style="font-size:15px;">⏱</span>
+                  </td>
+                  <td style="color:#6b7280;font-size:13px;line-height:1.65;padding-left:8px;">
+                    <strong style="color:#374151;">This link expires in 1 hour.</strong> After that you'll need to request a new one.
+                  </td>
+                </tr>
+                <tr><td colspan="2" style="padding:8px 0;"></td></tr>
+                <tr>
+                  <td width="20" valign="top" style="padding-top:1px;">
+                    <span style="font-size:15px;">🔒</span>
+                  </td>
+                  <td style="color:#6b7280;font-size:13px;line-height:1.65;padding-left:8px;">
+                    For security, this link can only be used once. Your current password remains unchanged until you complete the reset.
+                  </td>
+                </tr>
+                <tr><td colspan="2" style="padding:8px 0;"></td></tr>
+                <tr>
+                  <td width="20" valign="top" style="padding-top:1px;">
+                    <span style="font-size:15px;">🤔</span>
+                  </td>
+                  <td style="color:#6b7280;font-size:13px;line-height:1.65;padding-left:8px;">
+                    Didn't request this? You can safely ignore this email — your account is secure and no changes have been made.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color:#f9fafb;padding:24px 40px;border-top:1px solid #e5e7eb;text-align:center;">
+              <p style="margin:0 0 4px;color:#9ca3af;font-size:12px;line-height:1.6;">
+                © ${new Date().getFullYear()} TouchGrass. All rights reserved.
+              </p>
+              <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">
+                You're receiving this email because a password reset was requested for your account.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    // ── Send via SMTP ────────────────────────────────────────────────────────
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 465,
+      secure: true,
+      auth: {
+        user: smtpUser.value(),
+        pass: smtpPass.value(),
+      },
+    });
+
+    try {
+      await transporter.sendMail({
+        from: `"TouchGrass" <${smtpUser.value()}>`,
+        to: email,
+        subject: "Reset Your TouchGrass Password",
+        html,
+      });
+    } catch (err) {
+      console.error("[PasswordReset] sendMail error:", err);
+      throw new HttpsError("internal", "Failed to send reset email.");
+    }
+
+    return { success: true };
+  }
+);
 
 // ── 0. Step-score rate-limit / anti-spoof ────────────────────────────────────
 // Fires on every user-document write. Validates that stepScore and dailySteps
