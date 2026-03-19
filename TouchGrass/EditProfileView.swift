@@ -16,6 +16,10 @@ struct EditProfileView: View {
     @State private var rawImage: UIImage?
     @State private var showCrop = false
     @State private var showPhotoError = false
+    @State private var showChangeUsername = false
+    @State private var newUsernameInput = ""
+    @State private var isChangingUsername = false
+    @State private var usernameChangeError: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -67,6 +71,21 @@ struct EditProfileView: View {
                     }
                 }
 
+                // Change username button
+                Button {
+                    newUsernameInput = ""
+                    showChangeUsername = true
+                } label: {
+                    Text("Change Username")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color(UIColor.systemGray5))
+                        .foregroundColor(.primary)
+                        .cornerRadius(12)
+                }
+                .padding(.horizontal, 30)
+
                 Spacer()
             }
             .navigationTitle("Edit Profile")
@@ -77,10 +96,78 @@ struct EditProfileView: View {
                 }
             }
         }
+        .sheet(isPresented: $showChangeUsername) {
+            NavigationStack {
+                VStack(spacing: 24) {
+                    Text("Enter a new username (min. 3 characters).")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 30)
+
+                    TextField("New username", text: $newUsernameInput)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .padding()
+                        .background(Color(UIColor.systemGray6))
+                        .cornerRadius(10)
+                        .padding(.horizontal, 30)
+
+                    Button {
+                        isChangingUsername = true
+                        Task {
+                            do {
+                                try await UserService.shared.changeUsername(to: newUsernameInput)
+                                isChangingUsername = false
+                                showChangeUsername = false
+                            } catch {
+                                usernameChangeError = error.localizedDescription
+                                isChangingUsername = false
+                            }
+                        }
+                    } label: {
+                        Group {
+                            if isChangingUsername {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text("Save Username")
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(newUsernameInput.trimmingCharacters(in: .whitespaces).count < 3 || isChangingUsername)
+                    .padding(.horizontal, 30)
+
+                    Spacer()
+                }
+                .padding(.top, 24)
+                .navigationTitle("Change Username")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showChangeUsername = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
         .alert("Couldn't Load Photo", isPresented: $showPhotoError) {
             Button("OK") {}
         } message: {
             Text("The selected photo could not be loaded. Please try another.")
+        }
+        .alert("Username Error", isPresented: Binding(
+            get: { usernameChangeError != nil },
+            set: { if !$0 { usernameChangeError = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(usernameChangeError ?? "")
         }
         .fullScreenCover(isPresented: $showCrop) {
             if let raw = rawImage {

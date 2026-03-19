@@ -1,9 +1,118 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
+const { getMessaging } = require("firebase-admin/messaging");
 
 initializeApp();
 const db = getFirestore();
+
+// ── Push notification helper ──────────────────────────────────────────────────
+async function sendNotification(token, title, body) {
+  if (!token) return;
+  try {
+    await getMessaging().send({ token, notification: { title, body } });
+  } catch (e) {
+    console.error("[FCM] send error:", e.message);
+  }
+}
+
+// ── 1. Friend request notification ───────────────────────────────────────────
+// Fires when a new friendRequest document is created with status "pending".
+exports.onFriendRequest = onDocumentCreated("friendRequests/{docId}", async (event) => {
+  const data = event.data?.data();
+  if (!data || data.status !== "pending") return;
+
+  const [recipientSnap, senderSnap] = await Promise.all([
+    db.collection("users").doc(data.toUID).get(),
+    db.collection("users").doc(data.fromUID).get(),
+  ]);
+
+  const token = recipientSnap.data()?.fcmToken;
+  const senderName = senderSnap.data()?.username || "Someone";
+  await sendNotification(token, "New Friend Request", `${senderName} wants to connect!`);
+});
+
+// ── 2. Leaderboard overtaken notification ────────────────────────────────────
+// Fires whenever a user document changes. If their dailySteps increased and
+// they now lead a friend who was previously ahead, notify that friend.
+exports.onStepsUpdate = onDocumentUpdated("users/{uid}", async (event) => {
+  const before = event.data?.before?.data();
+  const after  = event.data?.after?.data();
+  if (!before || !after) return;
+
+  const newSteps = after.dailySteps  || 0;
+  const oldSteps = before.dailySteps || 0;
+  if (newSteps <= oldSteps) return; // only act on increases
+
+  const uid = event.params.uid;
+  const updaterName = after.username || "A friend";
+
+  // Fetch all accepted friend requests involving this user
+  const [fromSnap, toSnap] = await Promise.all([
+    db.collection("friendRequests").where("fromUID", "==", uid).where("status", "==", "accepted").get(),
+    db.collection("friendRequests").where("toUID",   "==", uid).where("status", "==", "accepted").get(),
+  ]);
+
+  const friendUIDs = [];
+  fromSnap.forEach((doc) => friendUIDs.push(doc.data().toUID));
+  toSnap.forEach((doc)   => friendUIDs.push(doc.data().fromUID));
+
+  for (const fid of friendUIDs) {
+    const friendSnap = await db.collection("users").doc(fid).get();
+    const friendData = friendSnap.data();
+    if (!friendData?.fcmToken) continue;
+
+    const friendSteps = friendData.dailySteps || 0;
+    // Friend was ahead before (or tied) and is now behind — they've been overtaken
+    if (oldSteps <= friendSteps && newSteps > friendSteps) {
+      await sendNotification(
+        friendData.fcmToken,
+        "You've been overtaken! 🏃",
+        `${updaterName} just passed you on today's leaderboard!`
+      );
+    }
+  }
+});
+
+// ── 3. Streak-at-risk reminder (22:00 UTC = 2 h before midnight reset) ───────
+exports.streakRiskReminder = onSchedule("0 22 * * *", async () => {
+  const usersSnap = await db.collection("users").get();
+  const users = {};
+  usersSnap.forEach((doc) => { users[doc.id] = { id: doc.id, ...doc.data() }; });
+
+  const friendsSnap = await db.collection("friendRequests").where("status", "==", "accepted").get();
+  const friendMap = {};
+  friendsSnap.forEach((doc) => {
+    const { fromUID, toUID } = doc.data();
+    if (!friendMap[fromUID]) friendMap[fromUID] = [];
+    if (!friendMap[toUID])   friendMap[toUID]   = [];
+    friendMap[fromUID].push(toUID);
+    friendMap[toUID].push(fromUID);
+  });
+
+  for (const uid of Object.keys(users)) {
+    const user = users[uid];
+    if ((user.dailyStreak || 0) === 0) continue; // no streak to protect
+    if (!user.fcmToken) continue;
+
+    const friendUIDs = friendMap[uid] || [];
+    const group = [user, ...friendUIDs.map((fid) => users[fid]).filter(Boolean)];
+
+    const dailyLeader = group.reduce((best, u) =>
+      (u.dailySteps || 0) >= (best.dailySteps || 0) ? u : best
+    );
+
+    if (dailyLeader.id !== uid) {
+      await sendNotification(
+        user.fcmToken,
+        "Streak at Risk! 🔥",
+        `Your ${user.dailyStreak}-day streak is in danger! Walk more to protect it!`
+      );
+    }
+  }
+  console.log("streakRiskReminder complete.");
+});
 
 // Returns "YYYY-MM-DD" for a given Date, using UTC.
 function dateStr(d) {

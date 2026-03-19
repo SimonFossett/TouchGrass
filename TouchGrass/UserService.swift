@@ -82,6 +82,25 @@ class UserService {
         }
     }
 
+    /// Changes the current user's username if it isn't already taken.
+    func changeUsername(to newUsername: String) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "UserService", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Not signed in"])
+        }
+        let trimmed = newUsername.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 3 else {
+            throw NSError(domain: "UserService", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "Username must be at least 3 characters"])
+        }
+        let taken = try await isUsernameTaken(trimmed)
+        guard !taken else {
+            throw NSError(domain: "UserService", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "Username is already taken"])
+        }
+        try await db.collection("users").document(uid).updateData(["username": trimmed])
+    }
+
     /// Returns true if the given username is already in use by another account.
     func isUsernameTaken(_ username: String) async throws -> Bool {
         let snapshot = try await db.collection("users")
