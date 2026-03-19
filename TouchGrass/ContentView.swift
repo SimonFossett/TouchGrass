@@ -8,6 +8,8 @@
 import SwiftUI
 import MapKit
 import CoreMotion
+import FirebaseAuth
+import FirebaseFirestore
 
 // MARK: - Main Content View
 struct ContentView: View {
@@ -105,22 +107,185 @@ struct TabBarButton: View {
     }
 }
 
+// MARK: - Home View Model
+
+@Observable
+class HomeViewModel {
+    var friends: [Friend] = []
+    var pendingRequests: [AppUser] = []
+    var isLoading = true
+    var errorMessage: String? = nil
+
+    private let db = Firestore.firestore()
+    private var incomingDocs: [QueryDocumentSnapshot] = []
+    private var outgoingDocs: [QueryDocumentSnapshot] = []
+    private var requestListeners: [ListenerRegistration] = []
+    private var friendDocListeners: [String: ListenerRegistration] = [:]
+
+    init() { startRequestListeners() }
+    deinit { stopAll() }
+
+    // MARK: Listeners
+
+    private func startRequestListeners() {
+        guard let myUID = Auth.auth().currentUser?.uid else { isLoading = false; return }
+
+        let incoming = db.collection("friendRequests")
+            .whereField("toUID", isEqualTo: myUID)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self else { return }
+                if let error { self.errorMessage = error.localizedDescription; return }
+                self.incomingDocs = snapshot?.documents ?? []
+                Task { await self.recomputeState() }
+            }
+
+        let outgoing = db.collection("friendRequests")
+            .whereField("fromUID", isEqualTo: myUID)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self else { return }
+                if let error { self.errorMessage = error.localizedDescription; return }
+                self.outgoingDocs = snapshot?.documents ?? []
+                Task { await self.recomputeState() }
+            }
+
+        requestListeners = [incoming, outgoing]
+    }
+
+    func refresh() {
+        stopAll()
+        friends = []
+        pendingRequests = []
+        isLoading = true
+        startRequestListeners()
+    }
+
+    // MARK: State derivation
+
+    private func recomputeState() async {
+        var pendingUIDs: [String] = []
+        var currentFriendUIDs: [String] = []
+
+        for doc in incomingDocs {
+            let status  = doc.data()["status"]  as? String ?? ""
+            let fromUID = doc.data()["fromUID"] as? String ?? ""
+            guard !fromUID.isEmpty else { continue }
+            if status == "pending"  { pendingUIDs.append(fromUID) }
+            else if status == "accepted" { currentFriendUIDs.append(fromUID) }
+        }
+        for doc in outgoingDocs {
+            let status = doc.data()["status"] as? String ?? ""
+            let toUID  = doc.data()["toUID"]  as? String ?? ""
+            guard !toUID.isEmpty else { continue }
+            if status == "accepted" { currentFriendUIDs.append(toUID) }
+        }
+
+        // Fetch display data for pending request senders
+        var users: [AppUser] = []
+        for uid in pendingUIDs {
+            if let doc = try? await db.collection("users").document(uid).getDocument(),
+               let username = doc.data()?["username"] as? String {
+                users.append(AppUser(id: uid, username: username,
+                                     stepScore: doc.data()?["stepScore"] as? Int ?? 0))
+            }
+        }
+        pendingRequests = users
+
+        // Sync per-friend document listeners
+        let newSet      = Set(currentFriendUIDs)
+        let listeningSet = Set(friendDocListeners.keys)
+
+        for uid in listeningSet.subtracting(newSet) {
+            friendDocListeners[uid]?.remove()
+            friendDocListeners.removeValue(forKey: uid)
+            friends.removeAll { $0.uid == uid }
+        }
+        let pinnedIDs = Set(UserDefaults.standard.stringArray(forKey: "pinnedFriendIDs") ?? [])
+        for uid in newSet.subtracting(listeningSet) {
+            attachFriendListener(uid: uid, pinnedIDs: pinnedIDs)
+        }
+
+        if isLoading { isLoading = false }
+    }
+
+    private func attachFriendListener(uid: String, pinnedIDs: Set<String>) {
+        let listener = db.collection("users").document(uid)
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let self,
+                      let data = snapshot?.data(),
+                      let username = data["username"] as? String else { return }
+                let lat    = data["latitude"]  as? Double ?? 0
+                let lng    = data["longitude"] as? Double ?? 0
+                let pinned = Set(UserDefaults.standard.stringArray(forKey: "pinnedFriendIDs") ?? [])
+                let friend = Friend(
+                    uid: uid,
+                    name: username,
+                    coordinate: .init(latitude: lat, longitude: lng),
+                    stepScore: data["stepScore"]   as? Int ?? 0,
+                    isPinned:  pinned.contains(uid),
+                    streak:    data["dailyStreak"] as? Int ?? 0
+                )
+                if let idx = self.friends.firstIndex(where: { $0.uid == uid }) {
+                    self.friends[idx] = friend
+                } else {
+                    self.friends.append(friend)
+                }
+            }
+        friendDocListeners[uid] = listener
+    }
+
+    // MARK: Actions
+
+    func acceptRequest(from uid: String) {
+        Task {
+            do { try await FriendService.shared.acceptRequest(from: uid) }
+            catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    func declineRequest(from uid: String) {
+        Task {
+            do { try await FriendService.shared.denyRequest(from: uid) }
+            catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    func removeFriend(uid: String) {
+        Task {
+            do { try await FriendService.shared.removeFriend(uid) }
+            catch { errorMessage = error.localizedDescription }
+        }
+    }
+
+    func togglePin(uid: String) {
+        guard let idx = friends.firstIndex(where: { $0.uid == uid }) else { return }
+        friends[idx].isPinned.toggle()
+        let isPinned = friends[idx].isPinned
+        var pinned = Set(UserDefaults.standard.stringArray(forKey: "pinnedFriendIDs") ?? [])
+        if isPinned { pinned.insert(uid) } else { pinned.remove(uid) }
+        UserDefaults.standard.set(Array(pinned), forKey: "pinnedFriendIDs")
+    }
+
+    private func stopAll() {
+        requestListeners.forEach { $0.remove() }
+        friendDocListeners.values.forEach { $0.remove() }
+        requestListeners.removeAll()
+        friendDocListeners.removeAll()
+    }
+}
+
 // MARK: - Home View
 struct HomeView: View {
     @State private var searchText: String = ""
-    @State private var friends: [Friend] = []
-    @State private var isLoadingFriends = true
+    @State private var viewModel = HomeViewModel()
     @State private var selectedFriend: Friend? = nil
     @State private var showingFriendDetail = false
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
-    @State private var pendingRequests: [AppUser] = []
-    @State private var errorMessage: String? = nil
     private let profileManager = ProfileImageManager.shared
 
     var filteredFriends: [Friend] {
-        let pinned = friends.filter { $0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
-        let unpinned = friends.filter { !$0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
+        let pinned   = viewModel.friends.filter {  $0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
+        let unpinned = viewModel.friends.filter { !$0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
         let all = pinned + unpinned
         guard !searchText.isEmpty else { return all }
         return all.filter { $0.name.lowercased().hasPrefix(searchText.lowercased()) }
@@ -158,7 +323,7 @@ struct HomeView: View {
                         do {
                             try FirebaseManager.shared.signOut()
                         } catch {
-                            errorMessage = error.localizedDescription
+                            viewModel.errorMessage = error.localizedDescription
                         }
                     }
                 }
@@ -187,7 +352,7 @@ struct HomeView: View {
             .background(Color(UIColor.systemGray5))
 
             // Friends list
-            if isLoadingFriends {
+            if viewModel.isLoading {
                 Spacer()
                 ProgressView()
                 Spacer()
@@ -196,13 +361,13 @@ struct HomeView: View {
                     LazyVStack(spacing: 0) {
 
                         // MARK: Pending friend requests (always at top)
-                        if !pendingRequests.isEmpty {
+                        if !viewModel.pendingRequests.isEmpty {
                             SectionHeader(title: "Friend Requests")
-                            ForEach(pendingRequests) { user in
+                            ForEach(viewModel.pendingRequests) { user in
                                 FriendRequestRow(user: user) {
-                                    acceptRequest(user)
+                                    viewModel.acceptRequest(from: user.id)
                                 } onDecline: {
-                                    declineRequest(user)
+                                    viewModel.declineRequest(from: user.id)
                                 }
                                 Divider().padding(.leading, 74)
                             }
@@ -210,7 +375,7 @@ struct HomeView: View {
                         }
 
                         // MARK: Regular friends list
-                        if friends.isEmpty {
+                        if viewModel.friends.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "person.2.fill")
                                     .font(.system(size: 50))
@@ -238,19 +403,17 @@ struct HomeView: View {
                     }
                 }
                 .refreshable {
-                    await loadFriendsAndRequests()
+                    viewModel.refresh()
                 }
             }
         }
-        .task {
-            await loadFriendsAndRequests()
-        }
         .sheet(isPresented: $showingFriendDetail) {
-            if let friend = selectedFriend,
-               let idx = friends.firstIndex(where: { $0.id == friend.id }) {
-                FriendDetailSheet(friend: friends[idx]) {
-                    friends[idx].isPinned.toggle()
-                    persistPin(uid: friends[idx].uid, isPinned: friends[idx].isPinned)
+            if let friend = selectedFriend {
+                FriendDetailSheet(friend: friend) {
+                    viewModel.togglePin(uid: friend.uid)
+                    showingFriendDetail = false
+                } onRemove: {
+                    viewModel.removeFriend(uid: friend.uid)
                     showingFriendDetail = false
                 }
                 .presentationDetents([.medium])
@@ -260,76 +423,13 @@ struct HomeView: View {
             EditProfileView()
         }
         .alert("Something went wrong", isPresented: Binding(
-            get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
         )) {
             Button("OK") {}
         } message: {
-            Text(errorMessage ?? "")
+            Text(viewModel.errorMessage ?? "")
         }
-    }
-
-    // MARK: - Helpers
-
-    private func loadFriendsAndRequests() async {
-        isLoadingFriends = true
-        async let friendsTask = LeaderboardService.shared.fetchFriendsForHome()
-        do {
-            let requests = try await FriendService.shared.incomingRequests()
-            let loaded   = await friendsTask
-            friends         = loaded
-            pendingRequests = requests
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-        isLoadingFriends = false
-    }
-
-    private func loadPendingRequests() async {
-        do {
-            pendingRequests = try await FriendService.shared.incomingRequests()
-        } catch {
-            print("[HomeView] loadPendingRequests: \(error)")
-        }
-    }
-
-    private func acceptRequest(_ user: AppUser) {
-        Task {
-            do {
-                try await FriendService.shared.acceptRequest(from: user.id)
-                pendingRequests.removeAll { $0.id == user.id }
-                let newFriend = Friend(
-                    uid: user.id,
-                    name: user.username,
-                    coordinate: .init(latitude: 0, longitude: 0),
-                    stepScore: user.stepScore,
-                    streak: user.dailyStreak
-                )
-                let insertIdx = friends.firstIndex { $0.name.lowercased() > user.username.lowercased() }
-                    ?? friends.endIndex
-                friends.insert(newFriend, at: insertIdx)
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    private func declineRequest(_ user: AppUser) {
-        Task {
-            do {
-                try await FriendService.shared.denyRequest(from: user.id)
-                pendingRequests.removeAll { $0.id == user.id }
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    private func persistPin(uid: String, isPinned: Bool) {
-        guard !uid.isEmpty else { return }
-        var pinned = Set(UserDefaults.standard.stringArray(forKey: "pinnedFriendIDs") ?? [])
-        if isPinned { pinned.insert(uid) } else { pinned.remove(uid) }
-        UserDefaults.standard.set(Array(pinned), forKey: "pinnedFriendIDs")
     }
 }
 
@@ -478,6 +578,9 @@ struct StreakBadge: View {
 struct FriendDetailSheet: View {
     let friend: Friend
     let onPin: () -> Void
+    let onRemove: () -> Void
+
+    @State private var showRemoveConfirm = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -521,6 +624,32 @@ struct FriendDetailSheet: View {
                 .cornerRadius(12)
             }
             .padding(.horizontal, 30)
+
+            // Remove Friend button
+            Button {
+                showRemoveConfirm = true
+            } label: {
+                HStack {
+                    Image(systemName: "person.badge.minus")
+                    Text("Remove Friend")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.red.opacity(0.1))
+                .foregroundColor(.red)
+                .cornerRadius(12)
+            }
+            .padding(.horizontal, 30)
+            .confirmationDialog(
+                "Remove \(friend.name)?",
+                isPresented: $showRemoveConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Remove Friend", role: .destructive) { onRemove() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("\(friend.name) will be removed from your friends list and won't see you on theirs.")
+            }
 
             Spacer()
         }
