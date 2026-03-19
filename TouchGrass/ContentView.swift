@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MapKit
+import CoreMotion
 
 // MARK: - Main Content View
 struct ContentView: View {
@@ -52,6 +53,31 @@ struct ContentView: View {
             .background(Color(UIColor.systemGray6))
         }
         .edgesIgnoringSafeArea(.bottom)
+        .task { checkMotionPermission() }
+        .sheet(isPresented: $showMotionSheet) {
+            MotionPermissionSheet(isDenied: motionPermissionDenied)
+                .presentationDetents([.medium])
+        }
+    }
+
+    // MARK: - Motion Permission
+
+    @State private var showMotionSheet = false
+    @State private var motionPermissionDenied = false
+
+    private func checkMotionPermission() {
+        switch CMPedometer.authorizationStatus() {
+        case .denied, .restricted:
+            motionPermissionDenied = true
+            showMotionSheet = true
+        case .notDetermined:
+            if !UserDefaults.standard.bool(forKey: "hasShownMotionPrompt") {
+                motionPermissionDenied = false
+                showMotionSheet = true
+            }
+        default:
+            break
+        }
     }
 }
 
@@ -948,6 +974,72 @@ struct StepMetricCard: View {
         .padding(.vertical, 20)
         .background(Color(UIColor.systemGray6))
         .cornerRadius(16)
+    }
+}
+
+// MARK: - Motion Permission Sheet
+
+struct MotionPermissionSheet: View {
+    let isDenied: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "figure.walk.circle.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.green)
+                .padding(.top, 40)
+
+            Text("Step Counting")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text(isDenied
+                 ? "Step counting is currently disabled. Without it your steps won't be tracked and you won't appear on the leaderboard."
+                 : "TouchGrass counts your steps to track daily progress and compete with friends on the leaderboard.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 32)
+
+            if isDenied {
+                Text("To fix this, go to:\nSettings → Privacy & Security → Motion & Fitness → TouchGrass")
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 32)
+            }
+
+            VStack(spacing: 12) {
+                Button(isDenied ? "Open Settings" : "Allow Step Counting") {
+                    if isDenied {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    } else {
+                        UserDefaults.standard.set(true, forKey: "hasShownMotionPrompt")
+                        // Accessing the shared instance starts CMPedometer,
+                        // which triggers the system permission dialog.
+                        _ = StepCounterManager.shared
+                    }
+                    dismiss()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.green)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+
+                Button("Not Now") {
+                    UserDefaults.standard.set(true, forKey: "hasShownMotionPrompt")
+                    dismiss()
+                }
+                .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+        }
     }
 }
 
