@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import CoreLocation
 import FirebaseAuth
 import FirebaseFirestore
 
@@ -49,7 +50,10 @@ class LeaderboardService {
 
         let friendUIDs = (try? await FriendService.shared.friendUIDs()) ?? []
         let allUIDs = [myUID] + friendUIDs
-        let stepManager = StepCounterManager.shared
+
+        // Capture MainActor-isolated values before leaving the main actor
+        let myDailySteps  = await MainActor.run { StepCounterManager.shared.dailySteps }
+        let myTotalScore  = await MainActor.run { StepCounterManager.shared.totalStepScore }
 
         // Fetch all user docs in parallel
         return await withTaskGroup(of: LeaderboardEntry?.self) { group in
@@ -61,8 +65,8 @@ class LeaderboardService {
 
                     let isCurrentUser = uid == myUID
                     // Use live values from StepCounterManager for the current user
-                    let dailySteps   = isCurrentUser ? stepManager.dailySteps   : (doc.data()?["dailySteps"]  as? Int ?? 0)
-                    let totalScore   = isCurrentUser ? stepManager.totalStepScore : (doc.data()?["stepScore"]  as? Int ?? 0)
+                    let dailySteps   = isCurrentUser ? myDailySteps  : (doc.data()?["dailySteps"] as? Int ?? 0)
+                    let totalScore   = isCurrentUser ? myTotalScore  : (doc.data()?["stepScore"]  as? Int ?? 0)
 
                     return LeaderboardEntry(
                         id: uid,
