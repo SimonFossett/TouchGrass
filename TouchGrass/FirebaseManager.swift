@@ -6,6 +6,7 @@
 import Foundation
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseFunctions
 import Observation
 
 // MARK: - Auth Errors
@@ -69,7 +70,9 @@ class FirebaseManager {
     }
 
     func sendPasswordReset(email: String) async throws {
-        try await Auth.auth().sendPasswordReset(withEmail: email)
+        let functions = Functions.functions()
+        _ = try await functions.httpsCallable("sendPasswordResetEmail")
+            .call(["email": email])
     }
 
     func signOut() throws {
