@@ -21,3 +21,7 @@ Podfile.lock
 
 # macOS
 .DS_Store
+
+# Node / Cloud Functions
+node_modules/
+functions/node_modules/
