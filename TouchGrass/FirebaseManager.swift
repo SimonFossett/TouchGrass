@@ -68,6 +68,10 @@ class FirebaseManager {
         try await Auth.auth().signIn(withEmail: email, password: password)
     }
 
+    func sendPasswordReset(email: String) async throws {
+        try await Auth.auth().sendPasswordReset(withEmail: email)
+    }
+
     func signOut() throws {
         try Auth.auth().signOut()
     }
