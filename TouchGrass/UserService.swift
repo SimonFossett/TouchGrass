@@ -65,13 +65,21 @@ class UserService {
     /// Pushes the user's latest step count up to Firestore so friends can see it.
     func updateStepScore(_ steps: Int) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-        try? await db.collection("users").document(uid).updateData(["stepScore": steps])
+        do {
+            try await db.collection("users").document(uid).updateData(["stepScore": steps])
+        } catch {
+            print("[UserService] updateStepScore failed: \(error)")
+        }
     }
 
     /// Pushes the user's daily step count to Firestore for leaderboard comparisons.
     func updateDailySteps(_ steps: Int) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-        try? await db.collection("users").document(uid).updateData(["dailySteps": steps])
+        do {
+            try await db.collection("users").document(uid).updateData(["dailySteps": steps])
+        } catch {
+            print("[UserService] updateDailySteps failed: \(error)")
+        }
     }
 
     /// Returns true if the given username is already in use by another account.
@@ -86,9 +94,13 @@ class UserService {
     /// Writes the user's current GPS coordinates to Firestore so friends can see them on the map.
     func updateLocation(_ coordinate: CLLocationCoordinate2D) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-        try? await db.collection("users").document(uid).updateData([
-            "latitude": coordinate.latitude,
-            "longitude": coordinate.longitude
-        ])
+        do {
+            try await db.collection("users").document(uid).updateData([
+                "latitude": coordinate.latitude,
+                "longitude": coordinate.longitude
+            ])
+        } catch {
+            print("[UserService] updateLocation failed: \(error)")
+        }
     }
 }

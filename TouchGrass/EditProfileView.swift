@@ -15,6 +15,7 @@ struct EditProfileView: View {
     @State private var selectedItem: PhotosPickerItem?
     @State private var rawImage: UIImage?
     @State private var showCrop = false
+    @State private var showPhotoError = false
 
     var body: some View {
         NavigationStack {
@@ -51,11 +52,18 @@ struct EditProfileView: View {
                 .padding(.horizontal, 30)
                 .onChange(of: selectedItem) { _, item in
                     Task {
-                        guard let item,
-                              let data = try? await item.loadTransferable(type: Data.self),
-                              let image = UIImage(data: data) else { return }
-                        rawImage = image
-                        showCrop = true
+                        guard let item else { return }
+                        do {
+                            guard let data = try await item.loadTransferable(type: Data.self),
+                                  let image = UIImage(data: data) else {
+                                showPhotoError = true
+                                return
+                            }
+                            rawImage = image
+                            showCrop = true
+                        } catch {
+                            showPhotoError = true
+                        }
                     }
                 }
 
@@ -68,6 +76,11 @@ struct EditProfileView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+        .alert("Couldn't Load Photo", isPresented: $showPhotoError) {
+            Button("OK") {}
+        } message: {
+            Text("The selected photo could not be loaded. Please try another.")
         }
         .fullScreenCover(isPresented: $showCrop) {
             if let raw = rawImage {

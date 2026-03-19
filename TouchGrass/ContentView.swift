@@ -115,6 +115,7 @@ struct HomeView: View {
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
     @State private var pendingRequests: [AppUser] = []
+    @State private var errorMessage: String? = nil
     private let profileManager = ProfileImageManager.shared
 
     var filteredFriends: [Friend] {
@@ -154,7 +155,11 @@ struct HomeView: View {
                     Button("Edit Profile") { showEditProfile = true }
                     Button("Sign Out", role: .destructive) {
                         ProfileImageManager.shared.clearImage()
-                        try? FirebaseManager.shared.signOut()
+                        do {
+                            try FirebaseManager.shared.signOut()
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
                     }
                 }
 
@@ -254,45 +259,69 @@ struct HomeView: View {
         .sheet(isPresented: $showEditProfile) {
             EditProfileView()
         }
+        .alert("Something went wrong", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     // MARK: - Helpers
 
     private func loadFriendsAndRequests() async {
         isLoadingFriends = true
-        async let friendsTask   = LeaderboardService.shared.fetchFriendsForHome()
-        async let requestsTask  = FriendService.shared.incomingRequests()
-        let (loaded, requests)  = await (friendsTask, (try? requestsTask) ?? [])
-        friends          = loaded
-        pendingRequests  = requests
+        async let friendsTask = LeaderboardService.shared.fetchFriendsForHome()
+        do {
+            let requests = try await FriendService.shared.incomingRequests()
+            let loaded   = await friendsTask
+            friends         = loaded
+            pendingRequests = requests
+        } catch {
+            errorMessage = error.localizedDescription
+        }
         isLoadingFriends = false
     }
 
     private func loadPendingRequests() async {
-        pendingRequests = (try? await FriendService.shared.incomingRequests()) ?? []
+        do {
+            pendingRequests = try await FriendService.shared.incomingRequests()
+        } catch {
+            print("[HomeView] loadPendingRequests: \(error)")
+        }
     }
 
     private func acceptRequest(_ user: AppUser) {
         Task {
-            try? await FriendService.shared.acceptRequest(from: user.id)
-            pendingRequests.removeAll { $0.id == user.id }
-            let newFriend = Friend(
-                uid: user.id,
-                name: user.username,
-                coordinate: .init(latitude: 0, longitude: 0),
-                stepScore: user.stepScore,
-                streak: user.dailyStreak
-            )
-            let insertIdx = friends.firstIndex { $0.name.lowercased() > user.username.lowercased() }
-                ?? friends.endIndex
-            friends.insert(newFriend, at: insertIdx)
+            do {
+                try await FriendService.shared.acceptRequest(from: user.id)
+                pendingRequests.removeAll { $0.id == user.id }
+                let newFriend = Friend(
+                    uid: user.id,
+                    name: user.username,
+                    coordinate: .init(latitude: 0, longitude: 0),
+                    stepScore: user.stepScore,
+                    streak: user.dailyStreak
+                )
+                let insertIdx = friends.firstIndex { $0.name.lowercased() > user.username.lowercased() }
+                    ?? friends.endIndex
+                friends.insert(newFriend, at: insertIdx)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
     private func declineRequest(_ user: AppUser) {
         Task {
-            try? await FriendService.shared.denyRequest(from: user.id)
-            pendingRequests.removeAll { $0.id == user.id }
+            do {
+                try await FriendService.shared.denyRequest(from: user.id)
+                pendingRequests.removeAll { $0.id == user.id }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -510,6 +539,7 @@ struct SearchView: View {
     @State private var requestStatuses: [String: FriendRequestStatus] = [:]
     @State private var selectedUser: AppUser? = nil
     @State private var isLoading = false
+    @State private var searchFailed = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -550,15 +580,30 @@ struct SearchView: View {
                 Spacer()
             } else if results.isEmpty {
                 Spacer()
-                VStack(spacing: 12) {
-                    Image(systemName: "person.slash.fill")
-                        .font(.system(size: 50))
-                        .foregroundColor(.gray.opacity(0.4))
-                    Text("No users found for \"\(searchText)\"")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                if searchFailed {
+                    VStack(spacing: 12) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 50))
+                            .foregroundColor(.gray.opacity(0.4))
+                        Text("Search failed")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text("Check your connection and try again")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "person.slash.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.gray.opacity(0.4))
+                        Text("No users found for \"\(searchText)\"")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
                 }
-                .padding()
                 Spacer()
             } else {
                 ScrollView {
@@ -576,12 +621,18 @@ struct SearchView: View {
         }
         // Re-runs automatically when searchText changes; cancels the previous task
         .task(id: searchText) {
-            guard !searchText.isEmpty else { results = []; return }
+            guard !searchText.isEmpty else { results = []; searchFailed = false; return }
             // 300ms debounce
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
             isLoading = true
-            results = (try? await UserService.shared.searchUsers(query: searchText)) ?? []
+            searchFailed = false
+            do {
+                results = try await UserService.shared.searchUsers(query: searchText)
+            } catch {
+                searchFailed = true
+                results = []
+            }
             isLoading = false
         }
         .sheet(item: $selectedUser) { user in
@@ -660,6 +711,7 @@ struct UserProfileSheet: View {
     @State private var status: FriendRequestStatus = .none
     @State private var isLoadingStatus = true
     @State private var isSending = false
+    @State private var errorMessage: String? = nil
 
     var body: some View {
         VStack(spacing: 24) {
@@ -714,6 +766,14 @@ struct UserProfileSheet: View {
             status = await FriendService.shared.status(for: user.id)
             isLoadingStatus = false
         }
+        .alert("Something went wrong", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     private var buttonIcon: String {
@@ -736,9 +796,13 @@ struct UserProfileSheet: View {
         guard status == .none else { return }
         isSending = true
         Task {
-            try? await FriendService.shared.sendRequest(to: user.id)
-            status = .requested
-            onStatusChange(.requested)
+            do {
+                try await FriendService.shared.sendRequest(to: user.id)
+                status = .requested
+                onStatusChange(.requested)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
             isSending = false
         }
     }
@@ -756,6 +820,8 @@ struct ProfileView: View {
     @State private var leaderboardType: LeaderboardType = .daily
     @State private var leaderboardEntries: [LeaderboardEntry] = []
     @State private var isLoadingLeaderboard = false
+    @State private var leaderboardLoadFailed = false
+    @State private var errorMessage: String? = nil
 
     var body: some View {
         ScrollView {
@@ -826,9 +892,12 @@ struct ProfileView: View {
                     if isLoadingLeaderboard {
                         ProgressView().padding(.vertical, 30)
                     } else if leaderboardEntries.isEmpty {
-                        Text("Add friends to see the leaderboard")
+                        Text(leaderboardLoadFailed
+                             ? "Couldn't load leaderboard — check your connection"
+                             : "Add friends to see the leaderboard")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
                             .padding(.vertical, 30)
                     } else {
                         let sorted = leaderboardEntries.sorted {
@@ -856,16 +925,35 @@ struct ProfileView: View {
             .frame(maxWidth: .infinity)
         }
         .task {
-            if let user = try? await UserService.shared.fetchCurrentUser() {
-                username = user.username
+            do {
+                if let user = try await UserService.shared.fetchCurrentUser() {
+                    username = user.username
+                }
+            } catch {
+                errorMessage = error.localizedDescription
             }
         }
         .task(id: leaderboardType) {
             isLoadingLeaderboard = true
-            leaderboardEntries = (try? await LeaderboardService.shared.fetchEntries()) ?? []
+            leaderboardLoadFailed = false
+            do {
+                leaderboardEntries = try await LeaderboardService.shared.fetchEntries()
+            } catch {
+                leaderboardLoadFailed = true
+                leaderboardEntries = []
+                errorMessage = error.localizedDescription
+            }
             isLoadingLeaderboard = false
             // Update streaks in background — reflected on next load
             Task { await LeaderboardService.shared.updateStreaksIfNeeded(entries: leaderboardEntries) }
+        }
+        .alert("Something went wrong", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(errorMessage ?? "")
         }
     }
 }
