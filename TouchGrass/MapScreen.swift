@@ -11,10 +11,12 @@ import Observation
 // MARK: - Friend Model
 struct Friend: Identifiable {
     let id = UUID()
+    var uid: String = ""         // Firebase UID (empty for demo/placeholder entries)
     let name: String
     var coordinate: CLLocationCoordinate2D
     var stepScore: Int = 0
     var isPinned: Bool = false
+    var streak: Int = 0          // Consecutive daily-win streak
 }
 
 // MARK: - ViewModel for Location & Friends

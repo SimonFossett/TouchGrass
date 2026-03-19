@@ -37,6 +37,8 @@ class StepCounterManager {
         dailyPedometer.startUpdates(from: startOfDay) { [weak self] data, _ in
             guard let steps = data?.numberOfSteps.intValue else { return }
             DispatchQueue.main.async { self?.dailySteps = steps }
+            // Keep Firestore in sync so friends see today's steps on the leaderboard
+            Task { await UserService.shared.updateDailySteps(steps) }
         }
     }
 
