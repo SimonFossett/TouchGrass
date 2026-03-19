@@ -1073,8 +1073,8 @@ struct ProfileView: View {
                 errorMessage = error.localizedDescription
             }
             isLoadingLeaderboard = false
-            // Update streaks in background — reflected on next load
-            Task { await LeaderboardService.shared.updateStreaksIfNeeded(entries: leaderboardEntries) }
+            // Streak updates and dailySteps resets are handled server-side by
+            // the `midnightReset` Cloud Function — no client-side write needed.
         }
         .alert("Something went wrong", isPresented: Binding(
             get: { errorMessage != nil },
