@@ -93,6 +93,20 @@ class FriendService {
         return AppUser(id: uid, username: username, stepScore: stepScore)
     }
 
+    /// Removes an accepted friendship. Deletes whichever friendRequests document
+    /// links the two users (either direction). Both users' real-time listeners
+    /// will fire, removing the friend from each other's list automatically.
+    func removeFriend(_ friendUID: String) async throws {
+        guard let myUID = Auth.auth().currentUser?.uid else { return }
+        // The document could be stored in either direction — delete both and ignore
+        // the "not found" error from whichever direction doesn't exist.
+        async let a: Void = db.collection("friendRequests")
+            .document("\(myUID)_\(friendUID)").delete()
+        async let b: Void = db.collection("friendRequests")
+            .document("\(friendUID)_\(myUID)").delete()
+        _ = try await (a, b)
+    }
+
     /// Returns UIDs of all confirmed friends of the current user.
     func friendUIDs() async throws -> [String] {
         guard let myUID = Auth.auth().currentUser?.uid else { return [] }
