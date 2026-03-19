@@ -6,7 +6,6 @@
 import Foundation
 import FirebaseAuth
 import FirebaseFirestore
-import FirebaseFunctions
 import Observation
 
 // MARK: - Auth Errors
@@ -70,15 +69,7 @@ class FirebaseManager {
     }
 
     func sendPasswordReset(email: String) async throws {
-        do {
-            let functions = Functions.functions()
-            _ = try await functions.httpsCallable("sendPasswordResetEmail")
-                .call(["email": email])
-        } catch {
-            // Cloud Function failed (e.g. SMTP misconfiguration). Fall back to
-            // Firebase Auth's built-in reset so the user always receives an email.
-            try await Auth.auth().sendPasswordReset(withEmail: email)
-        }
+        try await Auth.auth().sendPasswordReset(withEmail: email)
     }
 
     func signOut() throws {
