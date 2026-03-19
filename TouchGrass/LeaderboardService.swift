@@ -137,10 +137,12 @@ class LeaderboardService {
                     guard let self,
                           let doc = try? await self.db.collection("users").document(uid).getDocument(),
                           let username = doc.data()?["username"] as? String else { return nil }
+                    let lat = doc.data()?["latitude"] as? Double ?? 0
+                    let lng = doc.data()?["longitude"] as? Double ?? 0
                     return Friend(
                         uid: uid,
                         name: username,
-                        coordinate: .init(latitude: 0, longitude: 0),
+                        coordinate: .init(latitude: lat, longitude: lng),
                         stepScore: doc.data()?["stepScore"] as? Int ?? 0,
                         isPinned: pinnedIDs.contains(uid),
                         streak: doc.data()?["dailyStreak"] as? Int ?? 0
