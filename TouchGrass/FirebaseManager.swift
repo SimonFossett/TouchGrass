@@ -15,8 +15,10 @@ class FirebaseManager {
     var isAuthenticated = false
     var currentUID: String? { Auth.auth().currentUser?.uid }
 
+    private var authListener: AuthStateDidChangeListenerHandle?
+
     private init() {
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+        authListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             self?.isAuthenticated = user != nil
         }
     }
