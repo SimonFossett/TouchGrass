@@ -92,6 +92,9 @@ struct HomeView: View {
     ]
     @State private var selectedFriend: Friend? = nil
     @State private var showingFriendDetail = false
+    @State private var showProfileMenu = false
+    @State private var showEditProfile = false
+    private let profileManager = ProfileImageManager.shared
 
     var filteredFriends: [Friend] {
         let pinned = friends.filter { $0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
@@ -103,19 +106,55 @@ struct HomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Full-width search bar
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                TextField("Search friends...", text: $searchText)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
+            // Header: profile picture + search bar
+            HStack(spacing: 12) {
+                // Profile picture button
+                Button {
+                    showProfileMenu = true
+                } label: {
+                    if let img = profileManager.profileImage {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 44, height: 44)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(Color(UIColor.systemGray3))
+                            .frame(width: 44, height: 44)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 20))
+                            )
                     }
                 }
+                .confirmationDialog("", isPresented: $showProfileMenu, titleVisibility: .hidden) {
+                    Button("Edit Profile") { showEditProfile = true }
+                    Button("Sign Out", role: .destructive) {
+                        ProfileImageManager.shared.clearImage()
+                        try? FirebaseManager.shared.signOut()
+                    }
+                }
+
+                // Search bar
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search friends...", text: $searchText)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(UIColor.systemBackground))
+                .cornerRadius(10)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -146,6 +185,9 @@ struct HomeView: View {
                 }
                 .presentationDetents([.medium])
             }
+        }
+        .sheet(isPresented: $showEditProfile) {
+            EditProfileView()
         }
     }
 }
