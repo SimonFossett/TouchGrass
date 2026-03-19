@@ -38,11 +38,6 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
 
-        // Example friends (replace with backend data)
-        friends = [
-            Friend(name: "Alice", coordinate: CLLocationCoordinate2D(latitude: 37.7799, longitude: -122.4294)),
-            Friend(name: "Bob", coordinate: CLLocationCoordinate2D(latitude: 37.7699, longitude: -122.4094))
-        ]
     }
 
     // MARK: - CLLocationManagerDelegate
