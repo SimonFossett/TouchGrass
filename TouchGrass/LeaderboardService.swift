@@ -85,44 +85,6 @@ class LeaderboardService {
         }
     }
 
-    // MARK: Streak update (call after loading entries, runs in background)
-
-    /// Checks whether the current user is leading either leaderboard today and
-    /// increments their streak counters in Firestore accordingly.
-    func updateStreaksIfNeeded(entries: [LeaderboardEntry]) async {
-        guard let myUID = Auth.auth().currentUser?.uid,
-              let me = entries.first(where: { $0.isCurrentUser }) else { return }
-
-        let today = dateString(for: Date())
-
-        let dailyLeader = entries.max { $0.dailySteps < $1.dailySteps }
-        if dailyLeader?.id == myUID, me.dailySteps > 0 {
-            await incrementStreak(uid: myUID, key: "daily", today: today)
-        }
-
-        let overallLeader = entries.max { $0.totalStepScore < $1.totalStepScore }
-        if overallLeader?.id == myUID, me.totalStepScore > 0 {
-            await incrementStreak(uid: myUID, key: "overall", today: today)
-        }
-    }
-
-    private func incrementStreak(uid: String, key: String, today: String) async {
-        let streakField      = "\(key)Streak"
-        let lastUpdatedField = "\(key)StreakLastUpdated"
-        let ref = db.collection("users").document(uid)
-
-        guard let doc = try? await ref.getDocument() else { return }
-        let lastUpdated   = doc.data()?[lastUpdatedField] as? String ?? ""
-        let currentStreak = doc.data()?[streakField]       as? Int    ?? 0
-
-        guard lastUpdated != today else { return }   // already recorded today
-
-        let yesterday  = dateString(for: Calendar.current.date(byAdding: .day, value: -1, to: Date())!)
-        let newStreak  = lastUpdated == yesterday ? currentStreak + 1 : 1
-
-        try? await ref.updateData([streakField: newStreak, lastUpdatedField: today])
-    }
-
     // MARK: Friends for HomeView (Firestore-backed, with streak data)
 
     /// Returns the current user's accepted friends as Friend objects, ready for
