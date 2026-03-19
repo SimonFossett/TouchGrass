@@ -951,27 +951,44 @@ struct ProfileView: View {
     @State private var isLoadingLeaderboard = false
     @State private var leaderboardLoadFailed = false
     @State private var errorMessage: String? = nil
+    @State private var showProfileMenu = false
+    @State private var showEditProfile = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
 
-                // MARK: Profile picture (centered)
-                ZStack {
-                    if let img = profileManager.profileImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 120, height: 120)
-                            .clipShape(Circle())
-                            .overlay(Circle().strokeBorder(Color(UIColor.systemGray4), lineWidth: 1))
-                    } else {
-                        Circle()
-                            .fill(Color(UIColor.systemGray3))
-                            .frame(width: 120, height: 120)
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 50))
-                            .foregroundColor(.white)
+                // MARK: Profile picture (centered, tappable)
+                Button {
+                    showProfileMenu = true
+                } label: {
+                    ZStack {
+                        if let img = profileManager.profileImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 120, height: 120)
+                                .clipShape(Circle())
+                                .overlay(Circle().strokeBorder(Color(UIColor.systemGray4), lineWidth: 1))
+                        } else {
+                            Circle()
+                                .fill(Color(UIColor.systemGray3))
+                                .frame(width: 120, height: 120)
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                .confirmationDialog("", isPresented: $showProfileMenu, titleVisibility: .hidden) {
+                    Button("Edit Profile") { showEditProfile = true }
+                    Button("Sign Out", role: .destructive) {
+                        ProfileImageManager.shared.clearImage()
+                        do {
+                            try FirebaseManager.shared.signOut()
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
                     }
                 }
                 .padding(.top, 48)
@@ -1052,6 +1069,18 @@ struct ProfileView: View {
                 .padding(.bottom, 24)
             }
             .frame(maxWidth: .infinity)
+        }
+        .sheet(isPresented: $showEditProfile) {
+            EditProfileView()
+        }
+        .onChange(of: showEditProfile) { _, isShowing in
+            if !isShowing {
+                Task {
+                    if let user = try? await UserService.shared.fetchCurrentUser() {
+                        username = user.username
+                    }
+                }
+            }
         }
         .task {
             do {
