@@ -65,7 +65,7 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
 // MARK: - Map View
 struct MapScreen: View {
     @State private var viewModel = MapViewModel()
-    @State private var stepManager = StepCounterManager()
+    private let stepManager = StepCounterManager.shared
 
     var body: some View {
         ZStack {
@@ -95,7 +95,7 @@ struct MapScreen: View {
                     HStack(spacing: 6) {
                         Image(systemName: "figure.walk")
                             .foregroundColor(.green)
-                        Text("Steps: \(stepManager.steps)")
+                        Text("Steps: \(stepManager.dailySteps)")
                             .fontWeight(.semibold)
                     }
                     .padding(.horizontal, 14)

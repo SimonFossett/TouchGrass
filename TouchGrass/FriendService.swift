@@ -49,6 +49,50 @@ class FriendService {
         return .none
     }
 
+    // MARK: - Incoming friend requests
+
+    /// Fetch all users who have sent the current user a pending friend request.
+    func incomingRequests() async throws -> [AppUser] {
+        guard let myUID = Auth.auth().currentUser?.uid else { return [] }
+
+        let snapshot = try await db.collection("friendRequests")
+            .whereField("toUID", isEqualTo: myUID)
+            .whereField("status", isEqualTo: "pending")
+            .getDocuments()
+
+        var users: [AppUser] = []
+        for doc in snapshot.documents {
+            guard let fromUID = doc.data()["fromUID"] as? String else { continue }
+            if let user = try? await fetchUser(uid: fromUID) {
+                users.append(user)
+            }
+        }
+        return users
+    }
+
+    /// Accept a pending incoming friend request from `fromUID`.
+    func acceptRequest(from fromUID: String) async throws {
+        guard let myUID = Auth.auth().currentUser?.uid else { return }
+        try await db.collection("friendRequests")
+            .document("\(fromUID)_\(myUID)")
+            .updateData(["status": "accepted"])
+    }
+
+    /// Decline a pending incoming friend request from `fromUID`.
+    func denyRequest(from fromUID: String) async throws {
+        guard let myUID = Auth.auth().currentUser?.uid else { return }
+        try await db.collection("friendRequests")
+            .document("\(fromUID)_\(myUID)")
+            .updateData(["status": "declined"])
+    }
+
+    private func fetchUser(uid: String) async throws -> AppUser {
+        let doc = try await db.collection("users").document(uid).getDocument()
+        let username = doc.data()?["username"] as? String ?? "Unknown"
+        let stepScore = doc.data()?["stepScore"] as? Int ?? 0
+        return AppUser(id: uid, username: username, stepScore: stepScore)
+    }
+
     /// Returns UIDs of all confirmed friends of the current user.
     func friendUIDs() async throws -> [String] {
         guard let myUID = Auth.auth().currentUser?.uid else { return [] }

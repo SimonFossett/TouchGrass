@@ -94,6 +94,7 @@ struct HomeView: View {
     @State private var showingFriendDetail = false
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
+    @State private var pendingRequests: [AppUser] = []
     private let profileManager = ProfileImageManager.shared
 
     var filteredFriends: [Friend] {
@@ -163,6 +164,22 @@ struct HomeView: View {
             // Friends list
             ScrollView {
                 LazyVStack(spacing: 0) {
+
+                    // MARK: Pending friend requests (always at top)
+                    if !pendingRequests.isEmpty {
+                        SectionHeader(title: "Friend Requests")
+                        ForEach(pendingRequests) { user in
+                            FriendRequestRow(user: user) {
+                                acceptRequest(user)
+                            } onDecline: {
+                                declineRequest(user)
+                            }
+                            Divider().padding(.leading, 74)
+                        }
+                        SectionHeader(title: "Friends")
+                    }
+
+                    // MARK: Regular friends list
                     ForEach(filteredFriends) { friend in
                         FriendRow(friend: friend)
                             .contentShape(Rectangle())
@@ -175,6 +192,12 @@ struct HomeView: View {
                     }
                 }
             }
+            .refreshable {
+                await loadPendingRequests()
+            }
+        }
+        .task {
+            await loadPendingRequests()
         }
         .sheet(isPresented: $showingFriendDetail) {
             if let friend = selectedFriend,
@@ -189,6 +212,112 @@ struct HomeView: View {
         .sheet(isPresented: $showEditProfile) {
             EditProfileView()
         }
+    }
+
+    // MARK: - Helpers
+
+    private func loadPendingRequests() async {
+        pendingRequests = (try? await FriendService.shared.incomingRequests()) ?? []
+    }
+
+    private func acceptRequest(_ user: AppUser) {
+        Task {
+            try? await FriendService.shared.acceptRequest(from: user.id)
+            pendingRequests.removeAll { $0.id == user.id }
+            // Insert the new friend in alphabetical order
+            let newFriend = Friend(
+                name: user.username,
+                coordinate: .init(latitude: 0, longitude: 0),
+                stepScore: user.stepScore
+            )
+            let insertIdx = friends.firstIndex { $0.name.lowercased() > user.username.lowercased() }
+                ?? friends.endIndex
+            friends.insert(newFriend, at: insertIdx)
+        }
+    }
+
+    private func declineRequest(_ user: AppUser) {
+        Task {
+            try? await FriendService.shared.denyRequest(from: user.id)
+            pendingRequests.removeAll { $0.id == user.id }
+        }
+    }
+}
+
+// MARK: - Section Header
+
+struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .padding(.leading, 16)
+                .padding(.vertical, 6)
+            Spacer()
+        }
+        .background(Color(UIColor.systemGray6))
+    }
+}
+
+// MARK: - Friend Request Row
+
+struct FriendRequestRow: View {
+    let user: AppUser
+    let onAccept: () -> Void
+    let onDecline: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(avatarColor(for: user.username))
+                    .frame(width: 52, height: 52)
+                Text(String(user.username.prefix(1)).uppercased())
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(user.username)
+                    .font(.system(size: 16, weight: .semibold))
+                Text("Wants to connect")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            HStack(spacing: 10) {
+                Button(action: onDecline) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color(UIColor.systemGray3))
+                        .clipShape(Circle())
+                }
+                Button(action: onAccept) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.green)
+                        .clipShape(Circle())
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(UIColor.systemBackground))
+    }
+
+    func avatarColor(for name: String) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
+        return colors[abs(name.hashValue) % colors.count]
     }
 }
 
@@ -537,11 +666,94 @@ struct UserProfileSheet: View {
 }
 
 struct ProfileView: View {
+    private let profileManager = ProfileImageManager.shared
+    private let stepManager = StepCounterManager.shared
+    @State private var username: String = ""
+
     var body: some View {
-        VStack {
-            Text("Profile Screen")
-                .font(.largeTitle)
+        ScrollView {
+            VStack(spacing: 28) {
+
+                // MARK: Profile picture (centered)
+                ZStack {
+                    if let img = profileManager.profileImage {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 120, height: 120)
+                            .clipShape(Circle())
+                            .overlay(Circle().strokeBorder(Color(UIColor.systemGray4), lineWidth: 1))
+                    } else {
+                        Circle()
+                            .fill(Color(UIColor.systemGray3))
+                            .frame(width: 120, height: 120)
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.top, 48)
+
+                // MARK: Username
+                if !username.isEmpty {
+                    Text(username)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                }
+
+                // MARK: Step metrics
+                HStack(spacing: 16) {
+                    StepMetricCard(
+                        value: stepManager.dailySteps.formatted(),
+                        label: "Daily Steps",
+                        icon: "figure.walk",
+                        color: .green
+                    )
+                    StepMetricCard(
+                        value: stepManager.totalStepScore.formatted(),
+                        label: "Step Score",
+                        icon: "star.fill",
+                        color: .orange
+                    )
+                }
+                .padding(.horizontal, 24)
+
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity)
         }
+        .task {
+            if let user = try? await UserService.shared.fetchCurrentUser() {
+                username = user.username
+            }
+        }
+    }
+}
+
+// MARK: - Step Metric Card
+
+struct StepMetricCard: View {
+    let value: String
+    let label: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 22))
+                .foregroundColor(color)
+            Text(value)
+                .font(.system(size: 26, weight: .bold))
+                .monospacedDigit()
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .background(Color(UIColor.systemGray6))
+        .cornerRadius(16)
     }
 }
 

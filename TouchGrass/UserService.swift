@@ -43,6 +43,15 @@ class UserService {
         }
     }
 
+    /// Returns the currently signed-in user's profile data from Firestore.
+    func fetchCurrentUser() async throws -> AppUser? {
+        guard let uid = Auth.auth().currentUser?.uid else { return nil }
+        let doc = try await db.collection("users").document(uid).getDocument()
+        guard let username = doc.data()?["username"] as? String else { return nil }
+        let stepScore = doc.data()?["stepScore"] as? Int ?? 0
+        return AppUser(id: uid, username: username, stepScore: stepScore)
+    }
+
     /// Pushes the user's latest step count up to Firestore so friends can see it.
     func updateStepScore(_ steps: Int) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
