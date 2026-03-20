@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct AuthView: View {
     @State private var isSignUp = false
@@ -19,10 +20,26 @@ struct AuthView: View {
             Spacer()
 
             // Logo
-            VStack(spacing: 8) {
-                Image(systemName: "figure.walk.circle.fill")
-                    .font(.system(size: 72))
-                    .foregroundColor(.green)
+            VStack(spacing: 12) {
+                ZStack {
+                    // Soft green glow ring
+                    Circle()
+                        .fill(Color.green.opacity(0.18))
+                        .frame(width: 118, height: 118)
+
+                    // White border circle with shadow
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 100, height: 100)
+                        .shadow(color: Color.green.opacity(0.5), radius: 14, x: 0, y: 4)
+
+                    // App icon
+                    Image(uiImage: UIImage(named: "AppIcon") ?? UIImage())
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 88, height: 88)
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                }
                 Text("TouchGrass")
                     .font(.largeTitle)
                     .fontWeight(.bold)
