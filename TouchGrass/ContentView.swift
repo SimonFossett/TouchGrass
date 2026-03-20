@@ -8,6 +8,7 @@
 import SwiftUI
 import MapKit
 import CoreMotion
+import Charts
 import FirebaseAuth
 import FirebaseFirestore
 
@@ -1004,29 +1005,30 @@ struct ProfileView: View {
                 }
                 .padding(.top, 48)
 
-                // MARK: Username
+                // MARK: Username + step score
                 if !username.isEmpty {
-                    Text(username)
-                        .font(.title2)
-                        .fontWeight(.bold)
+                    VStack(spacing: 4) {
+                        Text(username)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Text("\(stepManager.totalStepScore.formatted()) step score")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
-                // MARK: Step metrics
-                HStack(spacing: 16) {
-                    StepMetricCard(
-                        value: stepManager.dailySteps.formatted(),
-                        label: "Daily Steps",
-                        icon: "figure.walk",
-                        color: .green
-                    )
-                    StepMetricCard(
-                        value: stepManager.totalStepScore.formatted(),
-                        label: "Step Score",
-                        icon: "star.fill",
-                        color: .orange
-                    )
-                }
+                // MARK: Step metrics — daily steps card
+                StepMetricCard(
+                    value: stepManager.dailySteps.formatted(),
+                    label: "Daily Steps",
+                    icon: "figure.walk",
+                    color: .green
+                )
                 .padding(.horizontal, 24)
+
+                // MARK: Today's steps comparison chart
+                DailyStepsChartView(entries: leaderboardEntries)
+                    .padding(.horizontal, 24)
 
                 // MARK: Apple Health import
                 AppleHealthCard()
@@ -1306,6 +1308,121 @@ struct StepMetricCard: View {
         .padding(.vertical, 20)
         .background(GlassBackground(cornerRadius: 16))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+    }
+}
+
+// MARK: - Daily Steps Chart
+
+struct StepChartPoint: Identifiable {
+    let id = UUID()
+    let hour: Int
+    let cumulativeSteps: Int
+    let label: String
+}
+
+struct DailyStepsChartView: View {
+    let entries: [LeaderboardEntry]
+
+    @State private var chartPoints: [StepChartPoint] = []
+    @State private var isLoading = true
+
+    // Pick the two comparison users based on the current user's rank.
+    // Rank 1 → compare 2nd & 3rd. Rank 2 → compare 1st & 3rd.
+    // Rank 3 → compare 1st & 2nd. Rank 4+ → compare 1st & 2nd.
+    private var comparisonEntries: [LeaderboardEntry] {
+        let sorted = entries.sorted { $0.dailySteps > $1.dailySteps }
+        guard let myIdx = sorted.firstIndex(where: { $0.isCurrentUser }) else { return [] }
+        switch myIdx {
+        case 0:  return Array(sorted.dropFirst().prefix(2))
+        case 1:  return sorted.count > 2 ? [sorted[0], sorted[2]] : [sorted[0]]
+        case 2:  return [sorted[0], sorted[1]]
+        default: return Array(sorted.prefix(2))
+        }
+    }
+
+    private var seriesLabels: [String] {
+        ["You"] + comparisonEntries.map { $0.username }
+    }
+
+    private var seriesColors: [Color] {
+        [.green] + [Color.blue, Color.orange].prefix(comparisonEntries.count)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Today")
+                .font(.headline)
+
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 160)
+            } else {
+                Chart(chartPoints) { point in
+                    LineMark(
+                        x: .value("Hour", point.hour),
+                        y: .value("Steps", point.cumulativeSteps)
+                    )
+                    .foregroundStyle(by: .value("Person", point.label))
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                }
+                .chartForegroundStyleScale(
+                    domain: seriesLabels,
+                    range: seriesColors
+                )
+                .chartXScale(domain: 0...23)
+                .chartXAxis {
+                    AxisMarks(values: [0, 4, 8, 12, 16, 20]) { value in
+                        if let hour = value.as(Int.self) {
+                            AxisValueLabel { Text(hourLabel(hour)).font(.caption2) }
+                            AxisGridLine()
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { value in
+                        if let steps = value.as(Int.self) {
+                            AxisValueLabel {
+                                Text(steps >= 1000 ? "\(steps / 1000)k" : "\(steps)")
+                                    .font(.caption2)
+                            }
+                            AxisGridLine()
+                        }
+                    }
+                }
+                .frame(height: 160)
+            }
+        }
+        .padding(16)
+        .background(GlassBackground(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+        .task { await buildChartData() }
+        .onChange(of: entries.count) { _, _ in Task { await buildChartData() } }
+    }
+
+    private func buildChartData() async {
+        isLoading = true
+        let hourlyMine = await StepCounterManager.shared.fetchHourlySteps()
+        var points: [StepChartPoint] = hourlyMine.map {
+            StepChartPoint(hour: $0.hour, cumulativeSteps: $0.steps, label: "You")
+        }
+        let currentHour = max(Calendar.current.component(.hour, from: Date()), 1)
+        for entry in comparisonEntries {
+            for hour in 0...currentHour {
+                let fraction = Double(hour) / Double(currentHour)
+                let projected = Int(Double(entry.dailySteps) * fraction)
+                points.append(StepChartPoint(hour: hour, cumulativeSteps: projected, label: entry.username))
+            }
+        }
+        chartPoints = points
+        isLoading = false
+    }
+
+    private func hourLabel(_ hour: Int) -> String {
+        if hour == 0 { return "12a" }
+        if hour < 12 { return "\(hour)a" }
+        if hour == 12 { return "12p" }
+        return "\(hour - 12)p"
     }
 }
 

@@ -67,6 +67,34 @@ class StepCounterManager {
         totalPedometer.stopUpdates()
     }
 
+    // MARK: - Hourly cumulative step data for today (used by the profile chart)
+
+    /// Returns an array of (hour, cumulativeSteps) pairs from midnight up to and
+    /// including the current hour. Each value is the total steps taken from
+    /// midnight to the end of that hour, giving a monotonically increasing curve.
+    func fetchHourlySteps() async -> [(hour: Int, steps: Int)] {
+        guard CMPedometer.isStepCountingAvailable() else { return [] }
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfDay = calendar.startOfDay(for: now)
+        let currentHour = calendar.component(.hour, from: now)
+        let pedometer = CMPedometer()
+        var results: [(hour: Int, steps: Int)] = []
+        for hour in 0...currentHour {
+            let periodEnd = min(
+                calendar.date(byAdding: .hour, value: hour + 1, to: startOfDay) ?? now,
+                now
+            )
+            let steps: Int = await withCheckedContinuation { continuation in
+                pedometer.queryPedometerData(from: startOfDay, to: periodEnd) { data, _ in
+                    continuation.resume(returning: data?.numberOfSteps.intValue ?? 0)
+                }
+            }
+            results.append((hour: hour, steps: steps))
+        }
+        return results
+    }
+
     // MARK: - Install date (set once, never changes)
 
     static var installDate: Date {
