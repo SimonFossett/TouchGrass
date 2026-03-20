@@ -343,7 +343,8 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+                .background(GlassBackground(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -683,7 +684,8 @@ struct SearchView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
+            .background(GlassBackground(cornerRadius: 10))
+            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(Color(UIColor.systemGray5))
@@ -700,7 +702,8 @@ struct SearchView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding(24)
-                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 16))
+                .background(GlassBackground(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
                 .padding()
                 Spacer()
             } else if isLoading {
@@ -1213,6 +1216,64 @@ struct LeaderboardRowView: View {
     }
 }
 
+// MARK: - Glass Background
+
+struct GlassBackground: View {
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        ZStack {
+            // Base frosted blur
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(.ultraThinMaterial)
+            // Top-left light reflection
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(0.6),
+                            .white.opacity(0.1),
+                            .clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .center
+                    )
+                )
+                .blendMode(.screen)
+            // Edge shine
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            .white.opacity(0.8),
+                            .white.opacity(0.2),
+                            .clear,
+                            .white.opacity(0.3)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+            // Inner shadow for depth
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                .blur(radius: 4)
+                .offset(x: 2, y: 2)
+                .mask(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [.black, .clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+        }
+    }
+}
+
 // MARK: - Step Metric Card
 
 struct StepMetricCard: View {
@@ -1235,7 +1296,8 @@ struct StepMetricCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
-        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 16))
+        .background(GlassBackground(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
     }
 }
 
