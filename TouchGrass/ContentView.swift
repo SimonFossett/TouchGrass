@@ -597,8 +597,8 @@ struct FriendDetailSheet: View {
 
             // Step score
             HStack(spacing: 6) {
-                Image(systemName: "figure.walk")
-                    .foregroundColor(.green)
+                Image(systemName: "star.fill")
+                    .foregroundColor(.orange)
                 Text("Step Score: \(friend.stepScore)")
                     .font(.headline)
             }
