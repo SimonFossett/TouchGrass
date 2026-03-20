@@ -52,13 +52,17 @@ struct ContentView: View {
             }
             .padding(.horizontal, 36)
             .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
             .background(GlassBackground(cornerRadius: 22))
             .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color(UIColor.systemGray6))
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
+            .background(
+                Color(UIColor.systemGray6)
+                    .ignoresSafeArea(edges: .bottom)
+            )
         }
-        .edgesIgnoringSafeArea(.bottom)
         .task { checkMotionPermission() }
         .sheet(isPresented: $showMotionSheet) {
             MotionPermissionSheet(isDenied: motionPermissionDenied)
