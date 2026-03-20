@@ -32,13 +32,11 @@
 	<key>NSHealthShareUsageDescription</key>
 	<string>TouchGrass reads your step count from Apple Health to include Apple Watch steps in your daily total and leaderboard score.</string>
 
-	<!-- Scene manifest (SwiftUI single-scene app) -->
+	<!-- Scene manifest (SwiftUI @main App — scene lifecycle managed by SwiftUI) -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
-		<key>UISceneConfigurations</key>
-		<dict/>
 	</dict>
 
 	<key>UIApplicationSupportsIndirectInputEvents</key>
