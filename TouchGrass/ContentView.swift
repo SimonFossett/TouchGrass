@@ -51,7 +51,7 @@ struct ContentView: View {
                 TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person")
             }
             .padding(.horizontal, 50)
-            .padding(.vertical, 10)
+            .padding(.vertical, 18)
             .background(Color(UIColor.systemGray6))
         }
         .edgesIgnoringSafeArea(.bottom)
@@ -1049,20 +1049,15 @@ struct ProfileView: View {
                         let sorted = leaderboardEntries.sorted {
                             $0.value(for: leaderboardType) > $1.value(for: leaderboardType)
                         }
-                        VStack(spacing: 0) {
+                        VStack(spacing: 8) {
                             ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, entry in
                                 LeaderboardRowView(
                                     placing: idx + 1,
                                     entry: entry,
                                     type: leaderboardType
                                 )
-                                if idx < sorted.count - 1 {
-                                    Divider().padding(.leading, 60)
-                                }
                             }
                         }
-                        .background(Color(UIColor.systemBackground))
-                        .cornerRadius(14)
                         .padding(.horizontal, 24)
                     }
                 }
@@ -1124,46 +1119,64 @@ struct LeaderboardRowView: View {
     let type: LeaderboardType
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Ordinal placing
+        HStack(spacing: 8) {
+            // Left box — placing ordinal
             Text(ordinal(placing))
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .bold))
                 .foregroundColor(placingColor)
-                .frame(width: 34, alignment: .center)
+                .frame(width: 62, height: 56)
+                .background(rowBackground)
+                .cornerRadius(10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(placingColor.opacity(0.55), lineWidth: 1.5)
+                )
 
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(avatarColor(for: entry.username))
-                    .frame(width: 42, height: 42)
-                Text(String(entry.username.prefix(1)).uppercased())
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+            // Right box — avatar, username (centered), streak, steps
+            HStack(spacing: 0) {
+                // Avatar
+                ZStack {
+                    Circle()
+                        .fill(avatarColor(for: entry.username))
+                        .frame(width: 34, height: 34)
+                    Text(String(entry.username.prefix(1)).uppercased())
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+                .padding(.leading, 10)
+
+                // Username — centered in remaining space
+                Text(entry.isCurrentUser ? "You" : entry.username)
+                    .font(.system(size: 15, weight: entry.isCurrentUser ? .bold : .regular))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
+
+                // Streak + steps (right-aligned, fixed area)
+                HStack(spacing: 6) {
+                    let streak = entry.streak(for: type)
+                    if streak > 0 {
+                        StreakBadge(streak: streak)
+                    }
+                    Text(entry.value(for: type).formatted())
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
+                .padding(.trailing, 10)
             }
-
-            // Name
-            Text(entry.isCurrentUser ? "You" : entry.username)
-                .font(.system(size: 15, weight: entry.isCurrentUser ? .bold : .regular))
-                .lineLimit(1)
-
-            Spacer()
-
-            // Streak badge
-            let streak = entry.streak(for: type)
-            if streak > 0 {
-                StreakBadge(streak: streak)
-            }
-
-            // Value
-            Text(entry.value(for: type).formatted())
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.secondary)
-                .monospacedDigit()
-                .frame(minWidth: 60, alignment: .trailing)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(rowBackground)
+            .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color(UIColor.systemGray4), lineWidth: 1)
+            )
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(entry.isCurrentUser ? Color.blue.opacity(0.06) : Color.clear)
+    }
+
+    private var rowBackground: Color {
+        entry.isCurrentUser ? Color.blue.opacity(0.06) : Color(UIColor.systemBackground)
     }
 
     private var placingColor: Color {
