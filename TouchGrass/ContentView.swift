@@ -392,7 +392,7 @@ struct HomeView: View {
                             ForEach(filteredFriends) { friend in
                                 FriendRow(friend: friend)
                                     .contentShape(Rectangle())
-                                    .onLongPressGesture(minimumDuration: 0.5) {
+                                    .onTapGesture {
                                         selectedFriend = friend
                                         showingFriendDetail = true
                                     }
