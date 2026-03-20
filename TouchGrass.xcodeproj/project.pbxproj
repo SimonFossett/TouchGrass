@@ -21,9 +21,22 @@
 		BA1C53112F6730FF004640E4 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BA1C53132F6730FF004640E4 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BA1C51FF2F6729F9004640E4 /* TouchGrass */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BA1C52022F6729F9004640E4 /* TouchGrass */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BA1C53132F6730FF004640E4 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 			path = TouchGrass;
 			sourceTree = "<group>";
 		};
