@@ -29,7 +29,7 @@ enum AuthError: LocalizedError {
 
 // MARK: - Validation
 
-private let usernameRegex = /^[a-z0-9_]{3,20}$/
+private let usernameRegex = /^[a-zA-Z0-9_]{3,20}$/
 
 @Observable
 class FirebaseManager {
@@ -62,6 +62,7 @@ class FirebaseManager {
             "uid": result.user.uid,
             "email": email.lowercased(),
             "username": username,
+            "usernameLower": username.lowercased(),
             "stepScore": 0,
             "createdAt": FieldValue.serverTimestamp()
         ])

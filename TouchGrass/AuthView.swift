@@ -117,7 +117,7 @@ struct AuthView: View {
         errorMessage = ""
 
         if isSignUp {
-            let trimmed = username.trimmingCharacters(in: .whitespaces).lowercased()
+            let trimmed = username.trimmingCharacters(in: .whitespaces)
             // Instant client-side checks before hitting the network
             guard trimmed.count >= 3 else {
                 errorMessage = "Username must be at least 3 characters."
@@ -142,7 +142,7 @@ struct AuthView: View {
         Task {
             do {
                 if isSignUp {
-                    let trimmed = username.trimmingCharacters(in: .whitespaces).lowercased()
+                    let trimmed = username.trimmingCharacters(in: .whitespaces)
                     try await FirebaseManager.shared.signUp(
                         email: email, password: password, username: trimmed)
                 } else {
