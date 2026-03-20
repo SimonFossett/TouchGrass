@@ -667,7 +667,7 @@ struct SearchView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Full-width search bar
+            // Search bar
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.gray)
@@ -681,9 +681,11 @@ struct SearchView: View {
                     }
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .glassEffect(.regular, in: Rectangle())
             .background(Color(UIColor.systemGray5))
 
             if searchText.isEmpty {
