@@ -53,8 +53,8 @@ struct AuthView: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .padding()
-                        .background(Color(UIColor.systemGray6))
-                        .cornerRadius(10)
+                        .background(GlassBackground(cornerRadius: 10))
+                        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
                 }
 
                 TextField("Email", text: $email)
@@ -62,13 +62,13 @@ struct AuthView: View {
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .padding()
-                    .background(Color(UIColor.systemGray6))
-                    .cornerRadius(10)
+                    .background(GlassBackground(cornerRadius: 10))
+                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
                 SecureField("Password", text: $password)
                     .padding()
-                    .background(Color(UIColor.systemGray6))
-                    .cornerRadius(10)
+                    .background(GlassBackground(cornerRadius: 10))
+                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
                 if !isSignUp {
                     HStack {
@@ -217,8 +217,8 @@ struct PasswordResetView: View {
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                             .padding()
-                            .background(Color(UIColor.systemGray6))
-                            .cornerRadius(10)
+                            .background(GlassBackground(cornerRadius: 10))
+                            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
                         if !errorMessage.isEmpty {
                             Text(errorMessage)
