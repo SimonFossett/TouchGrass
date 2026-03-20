@@ -38,6 +38,7 @@ class UserService {
         let snapshot = try await db.collection("users")
             .whereField("username", isGreaterThanOrEqualTo: lower)
             .whereField("username", isLessThan: lower + "\u{f8ff}")
+            .order(by: "username")
             .limit(to: 20)
             .getDocuments()
 
