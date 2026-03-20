@@ -52,20 +52,30 @@ class FirebaseManager {
             throw AuthError.invalidUsername
         }
 
-        // Ensure the username is not already taken
-        guard try await !UserService.shared.isUsernameTaken(username) else {
-            throw AuthError.usernameTaken
-        }
-
+        // Create the Auth account first so the user is authenticated — Firestore
+        // rules require auth for reads, so the username check must happen after this.
         let result = try await Auth.auth().createUser(withEmail: email, password: password)
-        try await Firestore.firestore().collection("users").document(result.user.uid).setData([
-            "uid": result.user.uid,
-            "email": email.lowercased(),
-            "username": username,
-            "usernameLower": username.lowercased(),
-            "stepScore": 0,
-            "createdAt": FieldValue.serverTimestamp()
-        ])
+
+        do {
+            // Now authenticated — check username availability and write profile.
+            guard try await !UserService.shared.isUsernameTaken(username) else {
+                try await result.user.delete()
+                throw AuthError.usernameTaken
+            }
+
+            try await Firestore.firestore().collection("users").document(result.user.uid).setData([
+                "uid": result.user.uid,
+                "email": email.lowercased(),
+                "username": username,
+                "usernameLower": username.lowercased(),
+                "stepScore": 0,
+                "createdAt": FieldValue.serverTimestamp()
+            ])
+        } catch {
+            // Clean up the auth account if anything after creation fails.
+            try? await result.user.delete()
+            throw error
+        }
     }
 
     func signIn(email: String, password: String) async throws {
