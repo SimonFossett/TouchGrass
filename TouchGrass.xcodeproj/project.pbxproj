@@ -13,10 +13,12 @@
 		BA1C53072F6730FF004640E4 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = BA1C53082F6730FF004640E4 /* FirebaseStorage */; };
 		BA1C530B2F6730FF004640E4 /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = BA1C530C2F6730FF004640E4 /* FirebaseMessaging */; };
 		BA1C530D2F6730FF004640E4 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = BA1C530E2F6730FF004640E4 /* FirebaseFunctions */; };
+		BA1C53102F6730FF004640E4 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BA1C53112F6730FF004640E4 /* HealthKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		BA1C52002F6729F9004640E4 /* TouchGrass.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TouchGrass.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BA1C53112F6730FF004640E4 /* HealthKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = HealthKit.framework; path = System/Library/Frameworks/HealthKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -38,6 +40,7 @@
 				BA1C53072F6730FF004640E4 /* FirebaseStorage in Frameworks */,
 				BA1C530B2F6730FF004640E4 /* FirebaseMessaging in Frameworks */,
 				BA1C530D2F6730FF004640E4 /* FirebaseFunctions in Frameworks */,
+				BA1C53102F6730FF004640E4 /* HealthKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -49,7 +52,16 @@
 			children = (
 				BA1C52022F6729F9004640E4 /* TouchGrass */,
 				BA1C52012F6729F9004640E4 /* Products */,
+				BA1C53122F6730FF004640E4 /* Frameworks */,
 			);
+			sourceTree = "<group>";
+		};
+		BA1C53122F6730FF004640E4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				BA1C53112F6730FF004640E4 /* HealthKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		BA1C52012F6729F9004640E4 /* Products */ = {
@@ -273,10 +285,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = TouchGrass/TouchGrass.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "TouchGrass reads your step count from Apple Health to include Apple Watch steps in your daily total and leaderboard score.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "TouchGrass uses your location to show you on the map and help you find nearby friends.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "This app uses motion data to track your steps.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -306,10 +320,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = TouchGrass/TouchGrass.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "TouchGrass reads your step count from Apple Health to include Apple Watch steps in your daily total and leaderboard score.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "TouchGrass uses your location to show you on the map and help you find nearby friends.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "This app uses motion data to track your steps.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -1013,6 +1013,10 @@ struct ProfileView: View {
                 }
                 .padding(.horizontal, 24)
 
+                // MARK: Apple Health import
+                AppleHealthCard()
+                    .padding(.horizontal, 24)
+
                 // MARK: Leaderboard section
                 VStack(spacing: 0) {
                     // Dropdown picker
@@ -1282,6 +1286,84 @@ struct MotionPermissionSheet: View {
 
             Spacer()
         }
+    }
+}
+
+// MARK: - Apple Health Import Card
+
+struct AppleHealthCard: View {
+    private let hkManager = HealthKitManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "heart.fill")
+                    .font(.title2)
+                    .foregroundColor(.red)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Health")
+                        .font(.headline)
+                    Text("Import steps from Apple Watch")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+
+            if !hkManager.isAvailable {
+                Text("HealthKit is not available on this device.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else if !hkManager.hasRequestedAccess {
+                Button {
+                    hkManager.requestAuthorization()
+                } label: {
+                    Label("Connect Apple Health", systemImage: "link")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+            } else {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if hkManager.isFetching {
+                            Text("Fetching…")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("\(hkManager.dailySteps.formatted()) steps today")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        Text("From Apple Health")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        hkManager.fetchSteps()
+                        hkManager.syncToLeaderboard()
+                    } label: {
+                        Text("Sync")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                    .disabled(hkManager.isFetching)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(14)
     }
 }
 
