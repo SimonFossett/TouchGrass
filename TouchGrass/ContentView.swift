@@ -343,8 +343,7 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .cornerRadius(10)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 10))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -684,7 +683,7 @@ struct SearchView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
+            .glassEffect(.regular, in: Rectangle())
 
             if searchText.isEmpty {
                 Spacer()
@@ -698,8 +697,7 @@ struct SearchView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding(24)
-                .background(.ultraThinMaterial)
-                .cornerRadius(16)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
                 .padding()
                 Spacer()
             } else if isLoading {
@@ -1234,8 +1232,7 @@ struct StepMetricCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
-        .background(.ultraThinMaterial)
-        .cornerRadius(16)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 

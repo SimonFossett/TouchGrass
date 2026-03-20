@@ -174,8 +174,7 @@ struct MapScreen: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(12)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
                     .padding()
                 }
                 Spacer()
