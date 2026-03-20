@@ -278,7 +278,6 @@ struct HomeView: View {
     @State private var searchText: String = ""
     @State private var viewModel = HomeViewModel()
     @State private var selectedFriend: Friend? = nil
-    @State private var showingFriendDetail = false
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
     private let profileManager = ProfileImageManager.shared
@@ -394,7 +393,6 @@ struct HomeView: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture {
                                         selectedFriend = friend
-                                        showingFriendDetail = true
                                     }
                                 Divider()
                                     .padding(.leading, 74)
@@ -407,17 +405,15 @@ struct HomeView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingFriendDetail) {
-            if let friend = selectedFriend {
-                FriendDetailSheet(friend: friend) {
-                    viewModel.togglePin(uid: friend.uid)
-                    showingFriendDetail = false
-                } onRemove: {
-                    viewModel.removeFriend(uid: friend.uid)
-                    showingFriendDetail = false
-                }
-                .presentationDetents([.medium])
+        .sheet(item: $selectedFriend) { friend in
+            FriendDetailSheet(friend: friend) {
+                viewModel.togglePin(uid: friend.uid)
+                selectedFriend = nil
+            } onRemove: {
+                viewModel.removeFriend(uid: friend.uid)
+                selectedFriend = nil
             }
+            .presentationDetents([.medium])
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileView()
