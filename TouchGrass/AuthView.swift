@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct AuthView: View {
     @State private var isSignUp = false
@@ -33,8 +32,8 @@ struct AuthView: View {
                         .frame(width: 100, height: 100)
                         .shadow(color: Color.green.opacity(0.5), radius: 14, x: 0, y: 4)
 
-                    // App icon
-                    Image(uiImage: UIImage(named: "AppIcon") ?? UIImage())
+                    // App icon — add image to Assets.xcassets as Image Set named "AppLogo"
+                    Image("AppLogo")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 88, height: 88)
