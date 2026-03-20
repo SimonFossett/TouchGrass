@@ -100,7 +100,7 @@ class UserService {
             throw NSError(domain: "UserService", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "Not signed in"])
         }
-        let trimmed = newUsername.trimmingCharacters(in: .whitespaces)
+        let trimmed = newUsername.trimmingCharacters(in: .whitespaces).lowercased()
         guard trimmed.count >= 3 else {
             throw NSError(domain: "UserService", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "Username must be at least 3 characters"])
