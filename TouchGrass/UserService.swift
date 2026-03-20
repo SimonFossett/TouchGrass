@@ -36,9 +36,9 @@ class UserService {
         let lower = query.lowercased()
 
         let snapshot = try await db.collection("users")
-            .whereField("username", isGreaterThanOrEqualTo: lower)
-            .whereField("username", isLessThan: lower + "\u{f8ff}")
-            .order(by: "username")
+            .whereField("usernameLower", isGreaterThanOrEqualTo: lower)
+            .whereField("usernameLower", isLessThan: lower + "\u{f8ff}")
+            .order(by: "usernameLower")
             .limit(to: 20)
             .getDocuments()
 
@@ -101,7 +101,7 @@ class UserService {
             throw NSError(domain: "UserService", code: 1,
                           userInfo: [NSLocalizedDescriptionKey: "Not signed in"])
         }
-        let trimmed = newUsername.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmed = newUsername.trimmingCharacters(in: .whitespaces)
         guard trimmed.count >= 3 else {
             throw NSError(domain: "UserService", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "Username must be at least 3 characters"])
@@ -111,13 +111,17 @@ class UserService {
             throw NSError(domain: "UserService", code: 3,
                           userInfo: [NSLocalizedDescriptionKey: "Username is already taken"])
         }
-        try await db.collection("users").document(uid).updateData(["username": trimmed])
+        try await db.collection("users").document(uid).updateData([
+            "username": trimmed,
+            "usernameLower": trimmed.lowercased()
+        ])
     }
 
     /// Returns true if the given username is already in use by another account.
+    /// Comparison is case-insensitive via the usernameLower field.
     func isUsernameTaken(_ username: String) async throws -> Bool {
         let snapshot = try await db.collection("users")
-            .whereField("username", isEqualTo: username)
+            .whereField("usernameLower", isEqualTo: username.lowercased())
             .limit(to: 1)
             .getDocuments()
         return !snapshot.isEmpty
