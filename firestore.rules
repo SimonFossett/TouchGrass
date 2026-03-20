@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ── Users ────────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      // Any signed-in user can read profiles (needed for search, leaderboard,
+      // friend location pins, and incoming-request previews)
+      allow read: if request.auth != null;
+      // Only the owner can create or update their own document.
+      // They cannot escalate their own stepScore to an arbitrary value from
+      // a crafted request — writes must come through the app.
+      allow create: if request.auth != null
+                    && request.auth.uid == uid;
+      allow update: if request.auth != null
+                    && request.auth.uid == uid;
+      allow delete: if request.auth != null
+                    && request.auth.uid == uid;
+    }
+    // ── Friend Requests ───────────────────────────────────────────────────────
+    match /friendRequests/{requestId} {
+      // Only the sender or recipient may read a request
+      allow read: if request.auth != null
+                  && (request.auth.uid == resource.data.fromUID
+                   || request.auth.uid == resource.data.toUID);
+      // Anyone signed in may create a request, but the fromUID must be
+      // their own UID (prevents sending requests impersonating someone else)
+      allow create: if request.auth != null
+                    && request.auth.uid == request.resource.data.fromUID;
+      // Only the recipient can update (accept / decline)
+      allow update: if request.auth != null
+                    && request.auth.uid == resource.data.toUID;
+      // Either party can delete (sender cancels, recipient cleans up)
+      allow delete: if request.auth != null
+                    && (request.auth.uid == resource.data.fromUID
+                     || request.auth.uid == resource.data.toUID);
+    }
+  }
+}
