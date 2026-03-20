@@ -684,6 +684,7 @@ struct SearchView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .glassEffect(.regular, in: Rectangle())
+            .background(Color(UIColor.systemGray5))
 
             if searchText.isEmpty {
                 Spacer()
