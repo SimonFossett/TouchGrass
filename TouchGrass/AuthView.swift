@@ -104,9 +104,24 @@ struct AuthView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
             }
-            .background(Color.green)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12).fill(Color.green)
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(LinearGradient(
+                            colors: [.white.opacity(0.45), .white.opacity(0.05), .clear],
+                            startPoint: .topLeading, endPoint: .center
+                        ))
+                        .blendMode(.screen)
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(LinearGradient(
+                            colors: [.white.opacity(0.75), .white.opacity(0.2), .clear, .white.opacity(0.25)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ), lineWidth: 1.5)
+                }
+            )
             .foregroundColor(.white)
-            .cornerRadius(12)
+            .shadow(color: Color.green.opacity(0.4), radius: 8, y: 4)
             .disabled(isLoading)
             .padding(.horizontal, 24)
 
@@ -239,9 +254,24 @@ struct PasswordResetView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
                         }
-                        .background(Color.green)
+                        .background(
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 12).fill(Color.green)
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(LinearGradient(
+                                        colors: [.white.opacity(0.45), .white.opacity(0.05), .clear],
+                                        startPoint: .topLeading, endPoint: .center
+                                    ))
+                                    .blendMode(.screen)
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(LinearGradient(
+                                        colors: [.white.opacity(0.75), .white.opacity(0.2), .clear, .white.opacity(0.25)],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    ), lineWidth: 1.5)
+                            }
+                        )
                         .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .shadow(color: Color.green.opacity(0.4), radius: 8, y: 4)
                         .disabled(isLoading || email.isEmpty)
                     }
                     .padding(.horizontal, 24)

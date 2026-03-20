@@ -50,8 +50,12 @@ struct ContentView: View {
                 Spacer()
                 TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person")
             }
-            .padding(.horizontal, 50)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 36)
+            .padding(.vertical, 14)
+            .background(GlassBackground(cornerRadius: 22))
+            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
             .background(Color(UIColor.systemGray6))
         }
         .edgesIgnoringSafeArea(.bottom)
