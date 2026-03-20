@@ -343,7 +343,7 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .glassEffect(in: RoundedRectangle(cornerRadius: 10))
+                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -683,7 +683,7 @@ struct SearchView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .glassEffect(in: RoundedRectangle(cornerRadius: 10))
+            .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(Color(UIColor.systemGray5))
@@ -700,7 +700,7 @@ struct SearchView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding(24)
-                .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+                .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 16))
                 .padding()
                 Spacer()
             } else if isLoading {
@@ -1235,7 +1235,7 @@ struct StepMetricCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
-        .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.clear, in: RoundedRectangle(cornerRadius: 16))
     }
 }
 
