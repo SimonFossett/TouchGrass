@@ -1370,13 +1370,14 @@ struct DailyStepsChartView: View {
                 )
                 .chartXScale(domain: 0...23)
                 .chartXAxis {
-                    AxisMarks(values: [0, 4, 8, 12, 16, 20]) { value in
+                    AxisMarks(values: [0, 6, 12, 18, 23]) { value in
                         if let hour = value.as(Int.self) {
                             AxisValueLabel { Text(hourLabel(hour)).font(.caption2) }
                             AxisGridLine()
                         }
                     }
                 }
+                .chartYScale(domain: 0...)
                 .chartYAxis {
                     AxisMarks { value in
                         if let steps = value.as(Int.self) {
