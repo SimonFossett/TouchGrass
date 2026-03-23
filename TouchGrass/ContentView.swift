@@ -59,10 +59,6 @@ struct ContentView: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .padding(.bottom, 8)
-            .background(
-                Color(UIColor.systemGray6)
-                    .ignoresSafeArea(edges: .bottom)
-            )
         }
         .task { checkMotionPermission() }
         .sheet(isPresented: $showMotionSheet) {
@@ -367,6 +363,12 @@ struct HomeView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
+
+                        // MARK: Apple Health import
+                        AppleHealthCard()
+                            .padding(.horizontal, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 4)
 
                         // MARK: Pending friend requests (always at top)
                         if !viewModel.pendingRequests.isEmpty {
@@ -1028,10 +1030,6 @@ struct ProfileView: View {
 
                 // MARK: Today's steps comparison chart
                 DailyStepsChartView(entries: leaderboardEntries)
-                    .padding(.horizontal, 24)
-
-                // MARK: Apple Health import
-                AppleHealthCard()
                     .padding(.horizontal, 24)
 
                 // MARK: Leaderboard section
