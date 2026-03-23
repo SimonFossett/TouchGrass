@@ -1377,7 +1377,7 @@ struct DailyStepsChartView: View {
                         }
                     }
                 }
-                .chartYScale(domain: 0...)
+                .chartYScale(domain: .automatic(includesZero: true))
                 .chartYAxis {
                     AxisMarks { value in
                         if let steps = value.as(Int.self) {
