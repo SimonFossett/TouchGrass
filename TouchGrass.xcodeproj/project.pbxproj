@@ -22,7 +22,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		BA1C53132F6730FF004640E4 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+		BA2ECE3D2F74806C003256DC /* Exceptions for "TouchGrass" folder in "TouchGrass" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -35,7 +35,7 @@
 		BA1C52022F6729F9004640E4 /* TouchGrass */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				BA1C53132F6730FF004640E4 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+				BA2ECE3D2F74806C003256DC /* Exceptions for "TouchGrass" folder in "TouchGrass" target */,
 			);
 			path = TouchGrass;
 			sourceTree = "<group>";
@@ -69,20 +69,20 @@
 			);
 			sourceTree = "<group>";
 		};
-		BA1C53122F6730FF004640E4 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				BA1C53112F6730FF004640E4 /* HealthKit.framework */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		BA1C52012F6729F9004640E4 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				BA1C52002F6729F9004640E4 /* TouchGrass.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		BA1C53122F6730FF004640E4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				BA1C53112F6730FF004640E4 /* HealthKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
