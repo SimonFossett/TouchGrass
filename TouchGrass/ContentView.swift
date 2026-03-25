@@ -15,6 +15,7 @@ import FirebaseFirestore
 // MARK: - Main Content View
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
+    @Namespace private var tabPillNamespace
     private let firebase = FirebaseManager.shared
 
     var body: some View {
@@ -43,13 +44,13 @@ struct ContentView: View {
 
             // Tab bar
             HStack {
-                TabBarButton(tab: .home, selectedTab: $selectedTab, systemIconName: "house")
+                TabBarButton(tab: .home, selectedTab: $selectedTab, systemIconName: "house", namespace: tabPillNamespace)
                 Spacer()
-                TabBarButton(tab: .search, selectedTab: $selectedTab, systemIconName: "magnifyingglass")
+                TabBarButton(tab: .search, selectedTab: $selectedTab, systemIconName: "magnifyingglass", namespace: tabPillNamespace)
                 Spacer()
-                TabBarButton(tab: .map, selectedTab: $selectedTab, systemIconName: "map")
+                TabBarButton(tab: .map, selectedTab: $selectedTab, systemIconName: "map", namespace: tabPillNamespace)
                 Spacer()
-                TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person")
+                TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person", namespace: tabPillNamespace)
             }
             .padding(.horizontal, 36)
             .padding(.vertical, 14)
@@ -98,16 +99,27 @@ struct TabBarButton: View {
     let tab: Tab
     @Binding var selectedTab: Tab
     let systemIconName: String
+    let namespace: Namespace.ID
 
     var body: some View {
         Button(action: {
-            selectedTab = tab
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                selectedTab = tab
+            }
         }) {
             Image(systemName: systemIconName)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 30, height: 30)
+                .frame(width: 24, height: 24)
                 .foregroundColor(selectedTab == tab ? .blue : .gray)
+                .padding(12)
+                .background {
+                    if selectedTab == tab {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(.white.opacity(0.3))
+                            .matchedGeometryEffect(id: "tabPill", in: namespace)
+                    }
+                }
         }
     }
 }
