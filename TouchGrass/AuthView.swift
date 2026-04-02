@@ -109,13 +109,13 @@ struct AuthView: View {
                     RoundedRectangle(cornerRadius: 12).fill(Color.green)
                     RoundedRectangle(cornerRadius: 12)
                         .fill(LinearGradient(
-                            colors: [.white.opacity(0.45), .white.opacity(0.05), .clear],
+                            colors: [.white.opacity(0.18), .white.opacity(0.02), .clear],
                             startPoint: .topLeading, endPoint: .center
                         ))
                         .blendMode(.screen)
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(LinearGradient(
-                            colors: [.white.opacity(0.75), .white.opacity(0.2), .clear, .white.opacity(0.25)],
+                            colors: [.white.opacity(0.35), .white.opacity(0.1), .clear, .white.opacity(0.12)],
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         ), lineWidth: 1.5)
                 }
@@ -259,13 +259,13 @@ struct PasswordResetView: View {
                                 RoundedRectangle(cornerRadius: 12).fill(Color.green)
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(LinearGradient(
-                                        colors: [.white.opacity(0.45), .white.opacity(0.05), .clear],
+                                        colors: [.white.opacity(0.18), .white.opacity(0.02), .clear],
                                         startPoint: .topLeading, endPoint: .center
                                     ))
                                     .blendMode(.screen)
                                 RoundedRectangle(cornerRadius: 12)
                                     .stroke(LinearGradient(
-                                        colors: [.white.opacity(0.75), .white.opacity(0.2), .clear, .white.opacity(0.25)],
+                                        colors: [.white.opacity(0.35), .white.opacity(0.1), .clear, .white.opacity(0.12)],
                                         startPoint: .topLeading, endPoint: .bottomTrailing
                                     ), lineWidth: 1.5)
                             }
