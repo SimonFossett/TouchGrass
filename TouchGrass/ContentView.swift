@@ -11,6 +11,7 @@ import CoreMotion
 import Charts
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 
 // MARK: - Main Content View
 struct ContentView: View {
@@ -1164,15 +1165,8 @@ struct LeaderboardRowView: View {
             // Right box — avatar, username (centered), streak, steps
             HStack(spacing: 0) {
                 // Avatar
-                ZStack {
-                    Circle()
-                        .fill(avatarColor(for: entry.username))
-                        .frame(width: 34, height: 34)
-                    Text(String(entry.username.prefix(1)).uppercased())
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                .padding(.leading, 10)
+                LeaderboardAvatarView(entry: entry)
+                    .padding(.leading, 10)
 
                 // Username — centered in remaining space
                 Text(entry.isCurrentUser ? "You" : entry.username)
@@ -1232,10 +1226,59 @@ struct LeaderboardRowView: View {
         return "\(n)\(suffix)"
     }
 
+}
+
+// MARK: - Leaderboard Avatar
+
+struct LeaderboardAvatarView: View {
+    let entry: LeaderboardEntry
+    @State private var friendImage: UIImage?
+    private let profileManager = ProfileImageManager.shared
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(avatarColor(for: entry.username))
+                .frame(width: 34, height: 34)
+
+            if entry.isCurrentUser, let img = profileManager.profileImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 34, height: 34)
+                    .clipShape(Circle())
+            } else if !entry.isCurrentUser, let img = friendImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 34, height: 34)
+                    .clipShape(Circle())
+            } else {
+                Text(String(entry.username.prefix(1)).uppercased())
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .task(id: entry.id) {
+            guard !entry.isCurrentUser else { return }
+            if let cached = Self.imageCache[entry.id] {
+                friendImage = cached
+                return
+            }
+            let ref = Storage.storage().reference().child("profile_images/\(entry.id).jpg")
+            guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
+                  let image = UIImage(data: data) else { return }
+            Self.imageCache[entry.id] = image
+            friendImage = image
+        }
+    }
+
     private func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
     }
+
+    private static var imageCache: [String: UIImage] = [:]
 }
 
 // MARK: - Glass Background
