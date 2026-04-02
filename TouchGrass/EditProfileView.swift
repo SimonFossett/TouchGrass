@@ -64,10 +64,6 @@ struct EditProfileView: View {
                                 return
                             }
                             rawImage = downsampledImage(image)
-                            // Allow PhotosPicker sheet to fully dismiss before
-                            // presenting the fullScreenCover, otherwise iOS queues
-                            // the presentation and it only appears after a background/foreground cycle
-                            try? await Task.sleep(for: .milliseconds(650))
                             showCrop = true
                         } catch {
                             showPhotoError = true
@@ -173,14 +169,15 @@ struct EditProfileView: View {
         } message: {
             Text(usernameChangeError ?? "")
         }
-        .fullScreenCover(isPresented: $showCrop) {
-            if let raw = rawImage {
+        .overlay {
+            if showCrop, let raw = rawImage {
                 ImageCropView(image: raw) { cropped in
                     profileManager.saveImage(cropped)
                     showCrop = false
                 } onCancel: {
                     showCrop = false
                 }
+                .ignoresSafeArea()
             }
         }
     }
