@@ -208,7 +208,7 @@ struct ImageCropView: View {
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
 
-    private let cropSize: CGFloat = 280
+    private let cropSize: CGFloat = 360
 
     var body: some View {
         GeometryReader { geo in
