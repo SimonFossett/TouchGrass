@@ -429,6 +429,7 @@ struct HomeView: View {
                 .refreshable {
                     viewModel.refresh()
                 }
+                .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
             }
         }
         .sheet(item: $selectedFriend) { friend in
@@ -1108,6 +1109,7 @@ struct ProfileView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
         .task {
             do {
                 if let user = try await UserService.shared.fetchCurrentUser() {
