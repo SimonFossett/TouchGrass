@@ -63,7 +63,7 @@ struct EditProfileView: View {
                                 showPhotoError = true
                                 return
                             }
-                            rawImage = image
+                            rawImage = downsampledImage(image)
                             showCrop = true
                         } catch {
                             showPhotoError = true
@@ -182,6 +182,19 @@ struct EditProfileView: View {
     }
 }
 
+private func downsampledImage(_ image: UIImage, maxDimension: CGFloat = 1500) -> UIImage {
+    let longest = max(image.size.width, image.size.height)
+    guard longest > maxDimension else { return image }
+    let scale = maxDimension / longest
+    let newSize = CGSize(width: (image.size.width * scale).rounded(),
+                         height: (image.size.height * scale).rounded())
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    return UIGraphicsImageRenderer(size: newSize, format: format).image { _ in
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+    }
+}
+
 // MARK: - Image Crop View
 
 struct ImageCropView: View {
@@ -233,22 +246,60 @@ struct ImageCropView: View {
                 CropOverlayView(cropSize: cropSize)
 
                 VStack {
-                    HStack {
+                    Spacer()
+                    HStack(spacing: 20) {
                         Button("Cancel") { onCancel() }
+                            .font(.body.weight(.semibold))
                             .foregroundColor(.white)
-                            .padding()
-                        Spacer()
+                            .frame(width: 120, height: 48)
+                            .background(
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .fill(Color.white.opacity(0.15))
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .fill(LinearGradient(
+                                            colors: [.white.opacity(0.18), .white.opacity(0.02), .clear],
+                                            startPoint: .topLeading, endPoint: .center
+                                        ))
+                                        .blendMode(.screen)
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .stroke(LinearGradient(
+                                            colors: [.white.opacity(0.35), .white.opacity(0.1), .clear, .white.opacity(0.12)],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing
+                                        ), lineWidth: 1.5)
+                                }
+                            )
+                            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+
                         Button {
                             let cropped = cropImage(containerSize: geo.size)
                             onSave(cropped)
                         } label: {
                             Text("Save")
-                                .fontWeight(.semibold)
+                                .font(.body.weight(.semibold))
                                 .foregroundColor(.white)
+                                .frame(width: 120, height: 48)
+                                .background(
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 24)
+                                            .fill(Color.green.opacity(0.7))
+                                        RoundedRectangle(cornerRadius: 24)
+                                            .fill(LinearGradient(
+                                                colors: [.white.opacity(0.18), .white.opacity(0.02), .clear],
+                                                startPoint: .topLeading, endPoint: .center
+                                            ))
+                                            .blendMode(.screen)
+                                        RoundedRectangle(cornerRadius: 24)
+                                            .stroke(LinearGradient(
+                                                colors: [.white.opacity(0.35), .white.opacity(0.1), .clear, .white.opacity(0.12)],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing
+                                            ), lineWidth: 1.5)
+                                    }
+                                )
+                                .shadow(color: Color.green.opacity(0.4), radius: 8, y: 4)
                         }
-                        .padding()
                     }
-                    Spacer()
+                    .padding(.bottom, 50)
                 }
             }
         }
