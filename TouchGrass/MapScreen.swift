@@ -40,10 +40,22 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
 
     override init() {
         super.init()
+
+        // Restore last known position so the map never cold-starts at San Francisco
+        let cachedLat = UserDefaults.standard.double(forKey: "lastUserLatitude")
+        let cachedLng = UserDefaults.standard.double(forKey: "lastUserLongitude")
+        if cachedLat != 0 || cachedLng != 0 {
+            position = .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: cachedLat, longitude: cachedLng),
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            ))
+        }
+
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
+        startFriendLocationListeners()
     }
 
     deinit {
@@ -73,6 +85,8 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
         if movedEnough || enoughTimeElapsed {
             lastUploadedLocation = location
             lastLocationUpload = Date()
+            UserDefaults.standard.set(location.coordinate.latitude, forKey: "lastUserLatitude")
+            UserDefaults.standard.set(location.coordinate.longitude, forKey: "lastUserLongitude")
             Task { await UserService.shared.updateLocation(location.coordinate) }
         }
     }
@@ -133,7 +147,7 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
 
 // MARK: - Map View
 struct MapScreen: View {
-    @State private var viewModel = MapViewModel()
+    var viewModel: MapViewModel
     private let stepManager = StepCounterManager.shared
 
     // Only show friends who have a real GPS fix (lat/lng both non-zero)
@@ -180,12 +194,6 @@ struct MapScreen: View {
                 }
                 Spacer()
             }
-        }
-        .onAppear {
-            viewModel.startFriendLocationListeners()
-        }
-        .onDisappear {
-            viewModel.stopFriendLocationListeners()
         }
     }
 }

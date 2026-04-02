@@ -15,6 +15,7 @@ import FirebaseFirestore
 // MARK: - Main Content View
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
+    @State private var mapViewModel = MapViewModel()
     @Namespace private var tabPillNamespace
     private let firebase = FirebaseManager.shared
 
@@ -35,7 +36,7 @@ struct ContentView: View {
                 case .search:
                     SearchView()
                 case .map:
-                    MapView()
+                    MapView(viewModel: mapViewModel)
                 case .profile:
                     ProfileView()
                 }
@@ -800,8 +801,9 @@ struct SearchView: View {
 }
 
 struct MapView: View {
+    var viewModel: MapViewModel
     var body: some View {
-        MapScreen()
+        MapScreen(viewModel: viewModel)
     }
 }
 
