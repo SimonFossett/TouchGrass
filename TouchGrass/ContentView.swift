@@ -29,7 +29,8 @@ struct ContentView: View {
     }
 
     var mainApp: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
+            // Content fills the full screen
             ZStack {
                 switch selectedTab {
                 case .home:
@@ -43,8 +44,9 @@ struct ContentView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(edges: .bottom)
 
-            // Tab bar
+            // Tab bar floats over content
             HStack {
                 TabBarButton(tab: .home, selectedTab: $selectedTab, systemIconName: "house", namespace: tabPillNamespace)
                 Spacer()
@@ -60,7 +62,6 @@ struct ContentView: View {
             .background(GlassBackground(cornerRadius: 22))
             .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
             .padding(.horizontal, 12)
-            .padding(.top, 8)
             .padding(.bottom, 8)
         }
         .task { checkMotionPermission() }
