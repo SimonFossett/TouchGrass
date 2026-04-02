@@ -248,6 +248,57 @@ struct ImageCropView: View {
 
                 VStack {
                     Spacer()
+
+                    // Zoom controls
+                    HStack(spacing: 0) {
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                scale = max(1.0, scale - 0.25)
+                                lastScale = scale
+                            }
+                        } label: {
+                            Image(systemName: "minus")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 56, height: 40)
+                        }
+
+                        Rectangle()
+                            .fill(Color.white.opacity(0.25))
+                            .frame(width: 1, height: 24)
+
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                scale = min(5.0, scale + 0.25)
+                                lastScale = scale
+                            }
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 56, height: 40)
+                        }
+                    }
+                    .background(
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(Color.white.opacity(0.15))
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(LinearGradient(
+                                    colors: [.white.opacity(0.18), .white.opacity(0.02), .clear],
+                                    startPoint: .topLeading, endPoint: .center
+                                ))
+                                .blendMode(.screen)
+                            RoundedRectangle(cornerRadius: 20)
+                                .stroke(LinearGradient(
+                                    colors: [.white.opacity(0.35), .white.opacity(0.1), .clear, .white.opacity(0.12)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                ), lineWidth: 1.5)
+                        }
+                    )
+                    .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                    .padding(.bottom, 16)
+
                     HStack(spacing: 20) {
                         Button("Cancel") { onCancel() }
                             .font(.body.weight(.semibold))
