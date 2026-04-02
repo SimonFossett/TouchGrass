@@ -147,7 +147,7 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
 
 // MARK: - Map View
 struct MapScreen: View {
-    var viewModel: MapViewModel
+    @State var viewModel: MapViewModel
     private let stepManager = StepCounterManager.shared
 
     // Only show friends who have a real GPS fix (lat/lng both non-zero)
@@ -200,5 +200,5 @@ struct MapScreen: View {
 
 // MARK: - Preview
 #Preview {
-    MapScreen()
+    MapScreen(viewModel: MapViewModel())
 }
