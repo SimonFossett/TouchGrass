@@ -1048,6 +1048,7 @@ struct ProfileView: View {
                 // MARK: Apple Health
                 AppleHealthCard()
                     .padding(.horizontal, 24)
+                    .padding(.bottom, 32)
 
             }
             .frame(maxWidth: .infinity)
