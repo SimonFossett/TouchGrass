@@ -9,6 +9,7 @@ import SwiftUI
 import MapKit
 import CoreMotion
 import Charts
+import PhotosUI
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
@@ -305,6 +306,12 @@ struct HomeView: View {
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
     private let profileManager = ProfileImageManager.shared
+    private let storyService = StoryService.shared
+    @State private var activeStoryUserIndex: Int? = nil
+    @State private var showMyStoryViewer = false
+    @State private var showAddStory = false
+    @State private var addStoryItem: PhotosPickerItem? = nil
+    @State private var isUploadingStory = false
 
     var filteredFriends: [Friend] {
         let pinned   = viewModel.friends.filter {  $0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
@@ -383,6 +390,14 @@ struct HomeView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
 
+                        // MARK: Explore Stories
+                        ExploreStoriesSection(
+                            myStories: storyService.myStories,
+                            friendStories: storyService.userStories,
+                            onTapMyStory: { showMyStoryViewer = true },
+                            onTapFriendStory: { idx in activeStoryUserIndex = idx },
+                            onAddStory: { showAddStory = true }
+                        )
 
                         // MARK: Pending friend requests (always at top)
                         if !viewModel.pendingRequests.isEmpty {
@@ -445,6 +460,54 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileView()
+        }
+        .photosPicker(isPresented: $showAddStory, selection: $addStoryItem, matching: .images)
+        .onChange(of: addStoryItem) { _, item in
+            guard let item else { return }
+            Task {
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data) else { addStoryItem = nil; return }
+                isUploadingStory = true
+                try? await storyService.postStory(image: image)
+                isUploadingStory = false
+                addStoryItem = nil
+            }
+        }
+        .onChange(of: viewModel.friends.count) { _, _ in
+            storyService.startListening(friendUIDs: viewModel.friends.map { $0.uid })
+        }
+        .task {
+            storyService.startListening(friendUIDs: viewModel.friends.map { $0.uid })
+        }
+        .overlay {
+            if showMyStoryViewer, !storyService.myStories.isEmpty {
+                let myUID = Auth.auth().currentUser?.uid ?? ""
+                let myEntry = UserStories(uid: myUID, username: "Me",
+                                         stories: storyService.myStories, hasUnseenStory: false)
+                StoryViewerView(
+                    allUserStories: [myEntry],
+                    currentUserIndex: .constant(0),
+                    onDismiss: { showMyStoryViewer = false },
+                    onMarkSeen: { _ in }
+                )
+                .ignoresSafeArea()
+            }
+        }
+        .overlay {
+            if let idx = activeStoryUserIndex,
+               !storyService.userStories.isEmpty,
+               idx < storyService.userStories.count {
+                StoryViewerView(
+                    allUserStories: storyService.userStories,
+                    currentUserIndex: Binding(
+                        get: { idx },
+                        set: { activeStoryUserIndex = $0 }
+                    ),
+                    onDismiss: { activeStoryUserIndex = nil },
+                    onMarkSeen: { storyService.markSeen(storyID: $0) }
+                )
+                .ignoresSafeArea()
+            }
         }
         .alert("Something went wrong", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
@@ -1670,6 +1733,393 @@ struct AppleHealthCard: View {
         .padding(16)
         .background(Color(UIColor.secondarySystemBackground))
         .cornerRadius(14)
+    }
+}
+
+// MARK: - Explore Stories Section
+
+struct ExploreStoriesSection: View {
+    let myStories: [Story]
+    let friendStories: [UserStories]
+    let onTapMyStory: () -> Void
+    let onTapFriendStory: (Int) -> Void
+    let onAddStory: () -> Void
+
+    private let profileManager = ProfileImageManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Section header
+            HStack {
+                Text("Explore Stories")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 16)
+                    .padding(.vertical, 6)
+                Spacer()
+            }
+            .background(Color(UIColor.systemGray6))
+
+            // Horizontal story bubbles
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 18) {
+                    // My Story bubble (always present)
+                    MyStoryBubble(
+                        profileImage: profileManager.profileImage,
+                        hasStory: !myStories.isEmpty,
+                        onTap: { myStories.isEmpty ? onAddStory() : onTapMyStory() },
+                        onLongPress: onAddStory
+                    )
+
+                    // Friend story bubbles
+                    ForEach(Array(friendStories.enumerated()), id: \.element.uid) { idx, userStory in
+                        StoryBubble(userStories: userStory)
+                            .onTapGesture { onTapFriendStory(idx) }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
+            }
+            .background(Color(UIColor.systemBackground))
+        }
+    }
+}
+
+// MARK: - My Story Bubble
+
+struct MyStoryBubble: View {
+    let profileImage: UIImage?
+    let hasStory: Bool
+    let onTap: () -> Void
+    let onLongPress: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 8) {
+                ZStack(alignment: .bottomTrailing) {
+                    ZStack {
+                        // Story ring when user has a story
+                        if hasStory {
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [.green, .mint],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 3
+                                )
+                                .frame(width: 76, height: 76)
+                        }
+
+                        // Profile image or placeholder
+                        if let img = profileImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: hasStory ? 68 : 72, height: hasStory ? 68 : 72)
+                                .clipShape(Circle())
+                        } else {
+                            Circle()
+                                .fill(Color(UIColor.systemGray3))
+                                .frame(width: hasStory ? 68 : 72, height: hasStory ? 68 : 72)
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 30))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(width: 76, height: 76)
+
+                    // + badge when no story
+                    if !hasStory {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                Image(systemName: "plus")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(.white)
+                            )
+                            .offset(x: 2, y: 2)
+                    }
+                }
+
+                Text("My Story")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            }
+            .frame(width: 80)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.5).onEnded { _ in onLongPress() }
+        )
+    }
+}
+
+// MARK: - Friend Story Bubble
+
+struct StoryBubble: View {
+    let userStories: UserStories
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                // Ring — rainbow for unseen, gray for seen
+                Circle()
+                    .stroke(
+                        userStories.hasUnseenStory
+                            ? LinearGradient(
+                                colors: [.purple, .pink, .orange, .yellow],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                              )
+                            : LinearGradient(
+                                colors: [Color(UIColor.systemGray3), Color(UIColor.systemGray3)],
+                                startPoint: .top, endPoint: .bottom
+                              ),
+                        lineWidth: 3
+                    )
+                    .frame(width: 76, height: 76)
+
+                StoryAvatarImage(uid: userStories.uid, username: userStories.username)
+                    .frame(width: 68, height: 68)
+                    .clipShape(Circle())
+            }
+
+            Text(userStories.username)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+                .lineLimit(1)
+        }
+        .frame(width: 80)
+    }
+}
+
+// MARK: - Story Avatar Image (cached)
+
+struct StoryAvatarImage: View {
+    let uid: String
+    let username: String
+    @State private var image: UIImage? = nil
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(avatarColor(for: username))
+            if let img = image {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Text(String(username.prefix(1)).uppercased())
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .task(id: uid) {
+            if let cached = Self.imageCache[uid] { image = cached; return }
+            let ref = Storage.storage().reference().child("profile_images/\(uid).jpg")
+            guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
+                  let img = UIImage(data: data) else { return }
+            Self.imageCache[uid] = img
+            image = img
+        }
+    }
+
+    private func avatarColor(for name: String) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
+        return colors[abs(name.hashValue) % colors.count]
+    }
+
+    private static var imageCache: [String: UIImage] = [:]
+}
+
+// MARK: - Story Viewer
+
+struct StoryViewerView: View {
+    let allUserStories: [UserStories]
+    @Binding var currentUserIndex: Int
+    let onDismiss: () -> Void
+    let onMarkSeen: (String) -> Void
+
+    @State private var currentStoryIndex: Int = 0
+    @State private var progress: CGFloat = 0
+    @State private var storyImage: UIImage? = nil
+    @State private var isLoadingImage = true
+    @GestureState private var dragY: CGFloat = 0
+
+    private let storyDuration: TimeInterval = 5.0
+
+    private var currentUser: UserStories { allUserStories[currentUserIndex] }
+    private var currentStory: Story { currentUser.stories[currentStoryIndex] }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            // Story image
+            if let img = storyImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isLoadingImage {
+                ProgressView().tint(.white)
+            }
+
+            // Tap zones: left = previous, right = next
+            HStack(spacing: 0) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { goToPrevious() }
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { goToNext() }
+            }
+
+            // Header: progress bars + user info
+            VStack(spacing: 0) {
+                // Progress bars
+                HStack(spacing: 4) {
+                    ForEach(0..<currentUser.stories.count, id: \.self) { i in
+                        StoryProgressBar(
+                            progress: i < currentStoryIndex ? 1.0
+                                      : i == currentStoryIndex ? progress
+                                      : 0.0
+                        )
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.top, 56)
+                .padding(.bottom, 8)
+
+                // Username row
+                HStack(spacing: 10) {
+                    StoryAvatarImage(uid: currentUser.uid, username: currentUser.username)
+                        .frame(width: 38, height: 38)
+                        .clipShape(Circle())
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(currentUser.username)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text(timeAgo(currentStory.createdAt))
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+
+                    Spacer()
+
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(10)
+                            .background(Color.white.opacity(0.15))
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.horizontal, 14)
+
+                Spacer()
+            }
+            .background(
+                LinearGradient(
+                    colors: [.black.opacity(0.55), .clear],
+                    startPoint: .top, endPoint: .init(x: 0.5, y: 0.35)
+                )
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+            )
+        }
+        .offset(y: dragY)
+        .animation(.interactiveSpring(), value: dragY)
+        .gesture(
+            DragGesture()
+                .updating($dragY) { value, state, _ in
+                    if value.translation.height > 0 { state = value.translation.height }
+                }
+                .onEnded { value in
+                    if value.translation.height > 120 { onDismiss() }
+                }
+        )
+        .task(id: "\(currentUserIndex)-\(currentStoryIndex)") {
+            await loadAndRunStory()
+        }
+    }
+
+    // MARK: - Navigation
+
+    private func goToNext() {
+        if currentStoryIndex < currentUser.stories.count - 1 {
+            currentStoryIndex += 1
+        } else if currentUserIndex < allUserStories.count - 1 {
+            currentUserIndex += 1
+            currentStoryIndex = 0
+        } else {
+            onDismiss()
+        }
+    }
+
+    private func goToPrevious() {
+        if currentStoryIndex > 0 {
+            currentStoryIndex -= 1
+        } else if currentUserIndex > 0 {
+            currentUserIndex -= 1
+            currentStoryIndex = max(0, allUserStories[currentUserIndex].stories.count - 1)
+        }
+    }
+
+    // MARK: - Story Loading + Timer
+
+    private func loadAndRunStory() async {
+        isLoadingImage = true
+        progress = 0
+        storyImage = nil
+        storyImage = await StoryService.shared.loadImage(for: currentStory)
+        onMarkSeen(currentStory.id)
+        isLoadingImage = false
+
+        // Animate progress bar over storyDuration
+        let steps = 200
+        let stepInterval = storyDuration / Double(steps)
+        for step in 1...steps {
+            guard !Task.isCancelled else { return }
+            try? await Task.sleep(nanoseconds: UInt64(stepInterval * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            progress = CGFloat(step) / CGFloat(steps)
+        }
+        guard !Task.isCancelled else { return }
+        goToNext()
+    }
+
+    private func timeAgo(_ date: Date) -> String {
+        let secs = Int(Date().timeIntervalSince(date))
+        if secs < 3600 { return "\(max(1, secs / 60))m ago" }
+        return "\(secs / 3600)h ago"
+    }
+}
+
+// MARK: - Story Progress Bar
+
+struct StoryProgressBar: View {
+    let progress: CGFloat
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.white.opacity(0.35))
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.white)
+                    .frame(width: geo.size.width * min(1, max(0, progress)))
+            }
+        }
+        .frame(height: 3)
     }
 }
 
