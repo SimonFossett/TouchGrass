@@ -981,6 +981,7 @@ struct ProfileView: View {
     private let profileManager = ProfileImageManager.shared
     private let stepManager    = StepCounterManager.shared
     @State private var username: String = ""
+    @State private var chartEntries: [LeaderboardEntry] = []
     @State private var errorMessage: String? = nil
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
@@ -1045,6 +1046,10 @@ struct ProfileView: View {
                 )
                 .padding(.horizontal, 24)
 
+                // MARK: Today's steps comparison chart
+                DailyStepsChartView(entries: chartEntries)
+                    .padding(.horizontal, 24)
+
             }
             .frame(maxWidth: .infinity)
         }
@@ -1066,6 +1071,7 @@ struct ProfileView: View {
                 if let user = try await UserService.shared.fetchCurrentUser() {
                     username = user.username
                 }
+                chartEntries = try await LeaderboardService.shared.fetchEntries()
             } catch {
                 errorMessage = error.localizedDescription
             }
