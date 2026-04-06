@@ -1450,9 +1450,9 @@ struct DailyStepsChartView: View {
                     domain: seriesLabels,
                     range: seriesColors
                 )
-                .chartXScale(domain: 0...23)
+                .chartXScale(domain: 0...24)
                 .chartXAxis {
-                    AxisMarks(values: [0, 6, 12, 18, 23]) { value in
+                    AxisMarks(values: [0, 6, 12, 18, 24]) { value in
                         if let hour = value.as(Int.self) {
                             AxisValueLabel { Text(hourLabel(hour)).font(.caption2) }
                             AxisGridLine()
@@ -1484,15 +1484,22 @@ struct DailyStepsChartView: View {
     private func buildChartData() async {
         isLoading = true
         let hourlyMine = await StepCounterManager.shared.fetchHourlySteps()
-        var points: [StepChartPoint] = hourlyMine.map {
-            StepChartPoint(hour: $0.hour, cumulativeSteps: $0.steps, label: "You")
+
+        // Always anchor midnight at 0. Each hourly reading covers startOfDay→(hour+1)am,
+        // so shift it forward by 1 on the x-axis so hour-0 data plots at x=1, not x=0.
+        var points: [StepChartPoint] = [StepChartPoint(hour: 0, cumulativeSteps: 0, label: "You")]
+        for reading in hourlyMine {
+            points.append(StepChartPoint(hour: reading.hour + 1, cumulativeSteps: reading.steps, label: "You"))
         }
-        let currentHour = max(Calendar.current.component(.hour, from: Date()), 1)
+
+        let currentHour = Calendar.current.component(.hour, from: Date())
         for entry in comparisonEntries {
+            // Anchor friends at midnight too
+            points.append(StepChartPoint(hour: 0, cumulativeSteps: 0, label: entry.username))
             for hour in 0...currentHour {
-                let fraction = Double(hour) / Double(currentHour)
+                let fraction = Double(hour + 1) / Double(currentHour + 1)
                 let projected = Int(Double(entry.dailySteps) * fraction)
-                points.append(StepChartPoint(hour: hour, cumulativeSteps: projected, label: entry.username))
+                points.append(StepChartPoint(hour: hour + 1, cumulativeSteps: projected, label: entry.username))
             }
         }
         chartPoints = points
@@ -1500,7 +1507,7 @@ struct DailyStepsChartView: View {
     }
 
     private func hourLabel(_ hour: Int) -> String {
-        if hour == 0 { return "12a" }
+        if hour == 0 || hour == 24 { return "12a" }
         if hour < 12 { return "\(hour)a" }
         if hour == 12 { return "12p" }
         return "\(hour - 12)p"
