@@ -39,6 +39,8 @@ struct ContentView: View {
                     SearchView()
                 case .map:
                     MapView(viewModel: mapViewModel)
+                case .leaderboard:
+                    LeaderboardView()
                 case .profile:
                     ProfileView()
                 }
@@ -53,6 +55,8 @@ struct ContentView: View {
                 TabBarButton(tab: .search, selectedTab: $selectedTab, systemIconName: "magnifyingglass", namespace: tabPillNamespace)
                 Spacer()
                 TabBarButton(tab: .map, selectedTab: $selectedTab, systemIconName: "map", namespace: tabPillNamespace)
+                Spacer()
+                TabBarButton(tab: .leaderboard, selectedTab: $selectedTab, systemIconName: "trophy", namespace: tabPillNamespace)
                 Spacer()
                 TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person", namespace: tabPillNamespace)
             }
@@ -94,7 +98,7 @@ struct ContentView: View {
 
 // MARK: - Tab Enum
 enum Tab {
-    case home, search, map, profile
+    case home, search, map, leaderboard, profile
 }
 
 // MARK: - Tab Bar Button
@@ -977,10 +981,6 @@ struct ProfileView: View {
     private let profileManager = ProfileImageManager.shared
     private let stepManager    = StepCounterManager.shared
     @State private var username: String = ""
-    @State private var leaderboardType: LeaderboardType = .daily
-    @State private var leaderboardEntries: [LeaderboardEntry] = []
-    @State private var isLoadingLeaderboard = false
-    @State private var leaderboardLoadFailed = false
     @State private var errorMessage: String? = nil
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
@@ -1045,55 +1045,6 @@ struct ProfileView: View {
                 )
                 .padding(.horizontal, 24)
 
-                // MARK: Today's steps comparison chart
-                DailyStepsChartView(entries: leaderboardEntries)
-                    .padding(.horizontal, 24)
-
-                // MARK: Leaderboard section
-                VStack(spacing: 0) {
-                    // Dropdown picker
-                    HStack {
-                        Text("\(leaderboardType.rawValue) Leaderboard")
-                            .font(.headline)
-                        Spacer()
-                        Picker("Leaderboard", selection: $leaderboardType) {
-                            ForEach(LeaderboardType.allCases) { type in
-                                Text(type.rawValue).tag(type)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 4)
-                    .padding(.bottom, 12)
-
-                    if isLoadingLeaderboard {
-                        ProgressView().padding(.vertical, 30)
-                    } else if leaderboardEntries.isEmpty {
-                        Text(leaderboardLoadFailed
-                             ? "Couldn't load leaderboard — check your connection"
-                             : "Add friends to see the leaderboard")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.vertical, 30)
-                    } else {
-                        let sorted = leaderboardEntries.sorted {
-                            $0.value(for: leaderboardType) > $1.value(for: leaderboardType)
-                        }
-                        VStack(spacing: 8) {
-                            ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, entry in
-                                LeaderboardRowView(
-                                    placing: idx + 1,
-                                    entry: entry,
-                                    type: leaderboardType
-                                )
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                    }
-                }
-                .padding(.bottom, 24)
             }
             .frame(maxWidth: .infinity)
         }
@@ -1119,20 +1070,6 @@ struct ProfileView: View {
                 errorMessage = error.localizedDescription
             }
         }
-        .task(id: leaderboardType) {
-            isLoadingLeaderboard = true
-            leaderboardLoadFailed = false
-            do {
-                leaderboardEntries = try await LeaderboardService.shared.fetchEntries()
-            } catch {
-                leaderboardLoadFailed = true
-                leaderboardEntries = []
-                errorMessage = error.localizedDescription
-            }
-            isLoadingLeaderboard = false
-            // Streak updates and dailySteps resets are handled server-side by
-            // the `midnightReset` Cloud Function — no client-side write needed.
-        }
         .alert("Something went wrong", isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -1140,6 +1077,85 @@ struct ProfileView: View {
             Button("OK") {}
         } message: {
             Text(errorMessage ?? "")
+        }
+    }
+}
+
+// MARK: - Leaderboard View
+
+struct LeaderboardView: View {
+    @State private var leaderboardType: LeaderboardType = .daily
+    @State private var leaderboardEntries: [LeaderboardEntry] = []
+    @State private var isLoading = false
+    @State private var loadFailed = false
+
+    private var sorted: [LeaderboardEntry] {
+        leaderboardEntries.sorted { $0.value(for: leaderboardType) > $1.value(for: leaderboardType) }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+
+                // MARK: Header row — title pill + picker pill
+                HStack(spacing: 12) {
+                    Text("\(leaderboardType.rawValue) Leaderboard")
+                        .font(.headline)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(GlassBackground(cornerRadius: 20))
+                        .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+
+                    Spacer()
+
+                    Picker("", selection: $leaderboardType) {
+                        ForEach(LeaderboardType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(GlassBackground(cornerRadius: 20))
+                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+
+                // MARK: Rows
+                if isLoading {
+                    ProgressView().padding(.vertical, 40)
+                } else if leaderboardEntries.isEmpty {
+                    Text(loadFailed
+                         ? "Couldn't load leaderboard — check your connection"
+                         : "Add friends to see the leaderboard")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 40)
+                        .padding(.horizontal, 24)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, entry in
+                            LeaderboardRowView(placing: idx + 1, entry: entry, type: leaderboardType)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
+        .task(id: leaderboardType) {
+            isLoading = true
+            loadFailed = false
+            do {
+                leaderboardEntries = try await LeaderboardService.shared.fetchEntries()
+            } catch {
+                loadFailed = true
+                leaderboardEntries = []
+            }
+            isLoading = false
         }
     }
 }
