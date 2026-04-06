@@ -428,9 +428,11 @@ struct HomeView: View {
                 .refreshable {
                     viewModel.refresh()
                 }
+                .scrollDismissesKeyboard(.immediately)
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
             }
         }
+        .dismissKeyboardOnTap()
         .sheet(item: $selectedFriend) { friend in
             FriendDetailSheet(friend: friend) {
                 viewModel.togglePin(uid: friend.uid)
@@ -775,8 +777,10 @@ struct SearchView: View {
                         }
                     }
                 }
+                .scrollDismissesKeyboard(.immediately)
             }
         }
+        .dismissKeyboardOnTap()
         // Re-runs automatically when searchText changes; cancels the previous task
         .task(id: searchText) {
             guard !searchText.isEmpty else { results = []; searchFailed = false; return }
@@ -1304,6 +1308,17 @@ struct LeaderboardAvatarView: View {
     }
 
     private static var imageCache: [String: UIImage] = [:]
+}
+
+// MARK: - Keyboard Helpers
+
+extension View {
+    func dismissKeyboardOnTap() -> some View {
+        simultaneousGesture(TapGesture().onEnded {
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        })
+    }
 }
 
 // MARK: - Glass Background
