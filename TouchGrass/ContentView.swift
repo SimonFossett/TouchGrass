@@ -383,11 +383,6 @@ struct HomeView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
 
-                        // MARK: Apple Health import
-                        AppleHealthCard()
-                            .padding(.horizontal, 16)
-                            .padding(.top, 12)
-                            .padding(.bottom, 4)
 
                         // MARK: Pending friend requests (always at top)
                         if !viewModel.pendingRequests.isEmpty {
@@ -1048,6 +1043,10 @@ struct ProfileView: View {
 
                 // MARK: Today's steps comparison chart
                 DailyStepsChartView(entries: chartEntries)
+                    .padding(.horizontal, 24)
+
+                // MARK: Apple Health
+                AppleHealthCard()
                     .padding(.horizontal, 24)
 
             }
