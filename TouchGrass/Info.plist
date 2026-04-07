@@ -25,6 +25,8 @@
 	<false/>
 
 	<!-- Privacy usage descriptions -->
+	<key>NSCameraUsageDescription</key>
+	<string>TouchGrass uses your camera to take dual-camera story photos to share with friends.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>TouchGrass uses your location to show you on the map and help you find nearby friends.</string>
 	<key>NSMotionUsageDescription</key>
