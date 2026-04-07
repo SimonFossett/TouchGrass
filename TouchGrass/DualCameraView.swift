@@ -278,7 +278,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         pipWidthConstraint  = pipContainerView.widthAnchor.constraint(equalToConstant: pipSize.width)
         pipHeightConstraint = pipContainerView.heightAnchor.constraint(equalToConstant: pipSize.height)
         NSLayoutConstraint.activate([
-            pipContainerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+            pipContainerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             pipContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             pipWidthConstraint!,
             pipHeightConstraint!
@@ -576,9 +576,12 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
         let pipW: CGFloat = sz.width  * 0.32
         let pipH: CGFloat = sz.height * 0.32
-        let margin: CGFloat = sz.width * 0.035
+        let leftMargin: CGFloat = sz.width  * 0.035
+        // topMargin is larger than leftMargin so the PiP clears the username /
+        // avatar row that the story viewer overlays across the top of the image.
+        let topMargin: CGFloat  = sz.height * 0.13
         let radius: CGFloat = pipW * 0.12
-        let pipRect = CGRect(x: margin, y: margin, width: pipW, height: pipH)
+        let pipRect = CGRect(x: leftMargin, y: topMargin, width: pipW, height: pipH)
 
         let format   = UIGraphicsImageRendererFormat()
         format.scale = 1
