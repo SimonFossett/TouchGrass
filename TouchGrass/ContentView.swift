@@ -1466,50 +1466,51 @@ struct GlassBackground: View {
 
     var body: some View {
         GeometryReader { geo in
-            // Compute the gradient end point so the reflection always travels at the
-            // same angle in *screen space* (35° below horizontal, top-left origin).
-            // Without this, a narrow pill and a tall card would show the highlight at
-            // completely different angles because LinearGradient's unit points are
-            // relative to each view's own bounds.
+            let w = geo.size.width
+            let h = geo.size.height
+
+            // Single light direction (35° below horizontal) applied to every gradient
+            // layer so the fill, border shine, and shadow all align at the same angle
+            // in screen space regardless of each element's aspect ratio.
             let angleRad = 35.0 * Double.pi / 180
-            let dist    = 150.0                                // pixels along the ray
-            let endX    = dist * cos(angleRad) / geo.size.width
-            let endY    = dist * sin(angleRad) / geo.size.height
+            let cosA     = cos(angleRad)
+            let sinA     = sin(angleRad)
+
+            // Short ray used for the fill reflection highlight
+            let reflEnd  = UnitPoint(x: 150 * cosA / w, y: 150 * sinA / h)
+
+            // Long ray (full diagonal) used for edge shine and inner-shadow mask
+            let diagLen  = sqrt(w * w + h * h)
+            let diagEnd  = UnitPoint(x: diagLen * cosA / w, y: diagLen * sinA / h)
 
             ZStack {
                 // Base frosted blur
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(.ultraThinMaterial)
-                // Angled light reflection – consistent screen-space direction on every element
+
+                // Fill reflection — fades over 150 pt along the light direction
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(
                         LinearGradient(
-                            colors: [
-                                .white.opacity(0.6),
-                                .white.opacity(0.1),
-                                .clear
-                            ],
+                            colors: [.white.opacity(0.6), .white.opacity(0.1), .clear],
                             startPoint: .topLeading,
-                            endPoint: UnitPoint(x: endX, y: endY)
+                            endPoint: reflEnd
                         )
                     )
                     .blendMode(.screen)
-                // Edge shine
+
+                // Edge shine stroke — bright top-left rim fading along the same angle
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(
                         LinearGradient(
-                            colors: [
-                                .white.opacity(0.8),
-                                .white.opacity(0.2),
-                                .clear,
-                                .white.opacity(0.3)
-                            ],
+                            colors: [.white.opacity(0.8), .white.opacity(0.2), .clear, .white.opacity(0.3)],
                             startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                            endPoint: diagEnd
                         ),
                         lineWidth: 1.5
                     )
-                // Inner shadow for depth
+
+                // Inner shadow — masked along the same angle so depth is consistent too
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(Color.black.opacity(0.15), lineWidth: 1)
                     .blur(radius: 4)
@@ -1520,7 +1521,7 @@ struct GlassBackground: View {
                                 LinearGradient(
                                     colors: [.black, .clear],
                                     startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                                    endPoint: diagEnd
                                 )
                             )
                     )
