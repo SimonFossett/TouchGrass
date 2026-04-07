@@ -175,15 +175,7 @@ struct MapAvatarView: View {
         .overlay(Circle().stroke(borderColor, lineWidth: 2.5))
         .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
         .task(id: uid) {
-            if let cached = FriendRow.imageCache[uid] {
-                profileImage = cached
-                return
-            }
-            let ref = Storage.storage().reference().child("profile_images/\(uid).jpg")
-            guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
-                  let image = UIImage(data: data) else { return }
-            FriendRow.imageCache[uid] = image
-            profileImage = image
+            profileImage = await AvatarCache.shared.fetch(uid: uid)
         }
     }
 
