@@ -10,6 +10,17 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 
+// MARK: - Story Error
+
+enum StoryError: LocalizedError {
+    case encodingFailed
+    var errorDescription: String? {
+        switch self {
+        case .encodingFailed: return "Could not prepare the image for upload."
+        }
+    }
+}
+
 // MARK: - Story Model
 
 struct Story: Identifiable {
@@ -114,26 +125,70 @@ class StoryService {
 
     func postStory(image: UIImage) async throws {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-        guard let data = image.jpegData(compressionQuality: 0.85) else { return }
+
+        // Cap at 1920px on the long side — composite photos from the dual
+        // camera can be 12 MP+, which produces 6–8 MB JPEGs and times out.
+        let resized = downsampleForStory(image)
+        guard let data = resized.jpegData(compressionQuality: 0.82) else {
+            throw StoryError.encodingFailed
+        }
+        print("[Story] uploading \(data.count / 1024) KB for uid \(uid)")
 
         let storyID = UUID().uuidString
         let ref = Storage.storage().reference().child("stories/\(uid)/\(storyID).jpg")
         let metadata = StorageMetadata()
         metadata.contentType = "image/jpeg"
-        _ = try await ref.putDataAsync(data, metadata: metadata)
-        let downloadURL = try await ref.downloadURL()
 
-        let username = try await fetchUsername(uid: uid)
-        let now = Date()
-        let expires = now.addingTimeInterval(24 * 60 * 60)
+        do {
+            _ = try await ref.putDataAsync(data, metadata: metadata)
+        } catch {
+            print("[Story] Storage upload FAILED: \(error.localizedDescription)")
+            throw error
+        }
 
-        try await db.collection("stories").document(storyID).setData([
-            "uid": uid,
-            "username": username,
-            "imageURL": downloadURL.absoluteString,
-            "createdAt": Timestamp(date: now),
-            "expiresAt": Timestamp(date: expires)
-        ])
+        let downloadURL: URL
+        do {
+            downloadURL = try await ref.downloadURL()
+        } catch {
+            print("[Story] downloadURL FAILED: \(error.localizedDescription)")
+            throw error
+        }
+
+        // Username is best-effort; story still posts even if fetch fails.
+        let username = (try? await fetchUsername(uid: uid)) ?? "Unknown"
+        let now      = Date()
+
+        do {
+            try await db.collection("stories").document(storyID).setData([
+                "uid":       uid,
+                "username":  username,
+                "imageURL":  downloadURL.absoluteString,
+                "createdAt": Timestamp(date: now),
+                "expiresAt": Timestamp(date: now.addingTimeInterval(24 * 60 * 60))
+            ])
+            print("[Story] Firestore write succeeded (\(storyID))")
+        } catch {
+            print("[Story] Firestore write FAILED: \(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    // MARK: - Image Helpers
+
+    private func downsampleForStory(_ image: UIImage) -> UIImage {
+        let maxDimension: CGFloat = 1920
+        let px = CGSize(width:  image.size.width  * image.scale,
+                        height: image.size.height * image.scale)
+        let longest = max(px.width, px.height)
+        guard longest > maxDimension else { return image }
+
+        let scale      = maxDimension / longest
+        let targetSize = CGSize(width: px.width * scale, height: px.height * scale)
+        let format     = UIGraphicsImageRendererFormat()
+        format.scale   = 1
+        return UIGraphicsImageRenderer(size: targetSize, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
     }
 
     // MARK: - Mark Seen
