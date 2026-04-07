@@ -350,16 +350,16 @@ struct HomeView: View {
                         Image(uiImage: img)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 44, height: 44)
+                            .frame(width: 58, height: 58)
                             .clipShape(Circle())
                     } else {
                         Circle()
                             .fill(Color(UIColor.systemGray3))
-                            .frame(width: 44, height: 44)
+                            .frame(width: 58, height: 58)
                             .overlay(
                                 Image(systemName: "person.fill")
                                     .foregroundColor(.white)
-                                    .font(.system(size: 20))
+                                    .font(.system(size: 26))
                             )
                     }
                 }
@@ -395,7 +395,7 @@ struct HomeView: View {
                 .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 14)
             .background(Color(UIColor.systemGray5))
 
             // Friends list
@@ -673,16 +673,16 @@ struct FriendRow: View {
             ZStack {
                 Circle()
                     .fill(avatarColor(for: friend.name))
-                    .frame(width: 52, height: 52)
+                    .frame(width: 64, height: 64)
                 if let img = profileImage {
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 52, height: 52)
+                        .frame(width: 64, height: 64)
                         .clipShape(Circle())
                 } else {
                     Text(String(friend.name.prefix(1)).uppercased())
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundColor(.white)
                 }
             }
@@ -706,7 +706,7 @@ struct FriendRow: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 14)
         .background(Color(UIColor.systemBackground))
         .task(id: friend.uid) {
             profileImage = await AvatarCache.shared.fetch(uid: friend.uid)
@@ -1957,7 +1957,7 @@ struct MyStoryBubble: View {
                                     ),
                                     lineWidth: 3
                                 )
-                                .frame(width: 76, height: 76)
+                                .frame(width: 92, height: 92)
                         }
 
                         // Profile image or placeholder
@@ -1965,27 +1965,27 @@ struct MyStoryBubble: View {
                             Image(uiImage: img)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: hasStory ? 68 : 72, height: hasStory ? 68 : 72)
+                                .frame(width: hasStory ? 84 : 88, height: hasStory ? 84 : 88)
                                 .clipShape(Circle())
                         } else {
                             Circle()
                                 .fill(Color(UIColor.systemGray3))
-                                .frame(width: hasStory ? 68 : 72, height: hasStory ? 68 : 72)
+                                .frame(width: hasStory ? 84 : 88, height: hasStory ? 84 : 88)
                             Image(systemName: "person.fill")
-                                .font(.system(size: 30))
+                                .font(.system(size: 36))
                                 .foregroundColor(.white)
                         }
                     }
-                    .frame(width: 76, height: 76)
+                    .frame(width: 92, height: 92)
 
                     // + badge only while there is no active story
                     if !hasStory {
                         Circle()
                             .fill(Color.blue)
-                            .frame(width: 24, height: 24)
+                            .frame(width: 26, height: 26)
                             .overlay(
                                 Image(systemName: "plus")
-                                    .font(.system(size: 13, weight: .bold))
+                                    .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(.white)
                             )
                             .offset(x: 2, y: 2)
@@ -1998,7 +1998,7 @@ struct MyStoryBubble: View {
                     .foregroundColor(.primary)
                     .lineLimit(1)
             }
-            .frame(width: 80)
+            .frame(width: 96)
         }
         .buttonStyle(.plain)
     }
@@ -2026,10 +2026,10 @@ struct StoryBubble: View {
                               ),
                         lineWidth: 3
                     )
-                    .frame(width: 76, height: 76)
+                    .frame(width: 92, height: 92)
 
                 StoryAvatarImage(uid: userStories.uid, username: userStories.username)
-                    .frame(width: 68, height: 68)
+                    .frame(width: 84, height: 84)
                     .clipShape(Circle())
             }
 
@@ -2039,7 +2039,7 @@ struct StoryBubble: View {
                 .foregroundColor(.primary)
                 .lineLimit(1)
         }
-        .frame(width: 80)
+        .frame(width: 96)
     }
 }
 
@@ -2060,7 +2060,7 @@ struct StoryAvatarImage: View {
                     .scaledToFill()
             } else {
                 Text(String(username.prefix(1)).uppercased())
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.system(size: 30, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
