@@ -1463,68 +1463,73 @@ extension View {
 
 struct GlassBackground: View {
     let cornerRadius: CGFloat
+    var showReflection: Bool = false
 
     var body: some View {
-        GeometryReader { geo in
-            // Compute the gradient end point so the reflection always travels at the
-            // same angle in *screen space* (35° below horizontal, top-left origin).
-            // Without this, a narrow pill and a tall card would show the highlight at
-            // completely different angles because LinearGradient's unit points are
-            // relative to each view's own bounds.
-            let angleRad = 35.0 * Double.pi / 180
-            let dist    = 150.0                                // pixels along the ray
-            let endX    = dist * cos(angleRad) / geo.size.width
-            let endY    = dist * sin(angleRad) / geo.size.height
-
-            ZStack {
-                // Base frosted blur
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(.ultraThinMaterial)
-                // Angled light reflection – consistent screen-space direction on every element
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(0.6),
-                                .white.opacity(0.1),
-                                .clear
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: UnitPoint(x: endX, y: endY)
-                        )
-                    )
-                    .blendMode(.screen)
-                // Edge shine
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(0.8),
-                                .white.opacity(0.2),
-                                .clear,
-                                .white.opacity(0.3)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-                // Inner shadow for depth
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.black.opacity(0.15), lineWidth: 1)
-                    .blur(radius: 4)
-                    .offset(x: 2, y: 2)
-                    .mask(
+        ZStack {
+            // Base frosted blur
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(.ultraThinMaterial)
+            if showReflection {
+                // Angled light reflection – consistent screen-space direction on every element.
+                // GeometryReader is used so the gradient angle stays at 35° below horizontal
+                // in screen space regardless of the element's aspect ratio.
+                GeometryReader { geo in
+                    let angleRad = 35.0 * Double.pi / 180
+                    let dist    = 150.0                                // pixels along the ray
+                    let endX    = dist * cos(angleRad) / geo.size.width
+                    let endY    = dist * sin(angleRad) / geo.size.height
+                    ZStack {
                         RoundedRectangle(cornerRadius: cornerRadius)
                             .fill(
                                 LinearGradient(
-                                    colors: [.black, .clear],
+                                    colors: [
+                                        .white.opacity(0.6),
+                                        .white.opacity(0.1),
+                                        .clear
+                                    ],
                                     startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                                    endPoint: UnitPoint(x: endX, y: endY)
                                 )
                             )
-                    )
+                            .blendMode(.screen)
+                        // Edge shine
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0.8),
+                                        .white.opacity(0.2),
+                                        .clear,
+                                        .white.opacity(0.3)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    }
+                }
+            } else {
+                // Subtle uniform border without reflection
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(Color.white.opacity(0.25), lineWidth: 1)
             }
+            // Inner shadow for depth
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                .blur(radius: 4)
+                .offset(x: 2, y: 2)
+                .mask(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [.black, .clear],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
         }
     }
 }

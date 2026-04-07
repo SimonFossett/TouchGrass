@@ -284,16 +284,7 @@ struct ImageCropView: View {
                             RoundedRectangle(cornerRadius: 20)
                                 .fill(Color.white.opacity(0.15))
                             RoundedRectangle(cornerRadius: 20)
-                                .fill(LinearGradient(
-                                    colors: [.white.opacity(0.18), .white.opacity(0.02), .clear],
-                                    startPoint: .topLeading, endPoint: .center
-                                ))
-                                .blendMode(.screen)
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(LinearGradient(
-                                    colors: [.white.opacity(0.35), .white.opacity(0.1), .clear, .white.opacity(0.12)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                ), lineWidth: 1.5)
+                                .stroke(Color.white.opacity(0.25), lineWidth: 1.5)
                         }
                     )
                     .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
@@ -309,16 +300,7 @@ struct ImageCropView: View {
                                     RoundedRectangle(cornerRadius: 24)
                                         .fill(Color.white.opacity(0.15))
                                     RoundedRectangle(cornerRadius: 24)
-                                        .fill(LinearGradient(
-                                            colors: [.white.opacity(0.18), .white.opacity(0.02), .clear],
-                                            startPoint: .topLeading, endPoint: .center
-                                        ))
-                                        .blendMode(.screen)
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .stroke(LinearGradient(
-                                            colors: [.white.opacity(0.35), .white.opacity(0.1), .clear, .white.opacity(0.12)],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing
-                                        ), lineWidth: 1.5)
+                                        .stroke(Color.white.opacity(0.25), lineWidth: 1.5)
                                 }
                             )
                             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
@@ -336,16 +318,7 @@ struct ImageCropView: View {
                                         RoundedRectangle(cornerRadius: 24)
                                             .fill(Color.green.opacity(0.7))
                                         RoundedRectangle(cornerRadius: 24)
-                                            .fill(LinearGradient(
-                                                colors: [.white.opacity(0.18), .white.opacity(0.02), .clear],
-                                                startPoint: .topLeading, endPoint: .center
-                                            ))
-                                            .blendMode(.screen)
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .stroke(LinearGradient(
-                                                colors: [.white.opacity(0.35), .white.opacity(0.1), .clear, .white.opacity(0.12)],
-                                                startPoint: .topLeading, endPoint: .bottomTrailing
-                                            ), lineWidth: 1.5)
+                                            .stroke(Color.white.opacity(0.25), lineWidth: 1.5)
                                     }
                                 )
                                 .shadow(color: Color.green.opacity(0.4), radius: 8, y: 4)
