@@ -1236,62 +1236,75 @@ struct LeaderboardView: View {
     @State private var leaderboardEntries: [LeaderboardEntry] = []
     @State private var isLoading = false
     @State private var loadFailed = false
+    @State private var firstPlaceImage: UIImage? = nil
 
     private var sorted: [LeaderboardEntry] {
         leaderboardEntries.sorted { $0.value(for: leaderboardType) > $1.value(for: leaderboardType) }
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
+        ZStack {
+            // First-place user's story as full-screen background
+            if let img = firstPlaceImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
+                    .overlay(Color.black.opacity(0.45).ignoresSafeArea())
+                    .transition(.opacity)
+            }
 
-                // MARK: Header row — title pill + picker pill
-                HStack(spacing: 12) {
-                    Text("\(leaderboardType.rawValue) Leaderboard")
-                        .font(.headline)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+            ScrollView {
+                VStack(spacing: 16) {
+
+                    // MARK: Header row — title pill + picker pill
+                    HStack(spacing: 12) {
+                        Text("\(leaderboardType.rawValue) Leaderboard")
+                            .font(.headline)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(GlassBackground(cornerRadius: 20))
+                            .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+
+                        Spacer()
+
+                        Picker("", selection: $leaderboardType) {
+                            ForEach(LeaderboardType.allCases) { type in
+                                Text(type.rawValue).tag(type)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         .background(GlassBackground(cornerRadius: 20))
                         .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
-
-                    Spacer()
-
-                    Picker("", selection: $leaderboardType) {
-                        ForEach(LeaderboardType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(GlassBackground(cornerRadius: 20))
-                    .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-
-                // MARK: Rows
-                if isLoading {
-                    ProgressView().padding(.vertical, 40)
-                } else if leaderboardEntries.isEmpty {
-                    Text(loadFailed
-                         ? "Couldn't load leaderboard — check your connection"
-                         : "Add friends to see the leaderboard")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.vertical, 40)
-                        .padding(.horizontal, 24)
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, entry in
-                            LeaderboardRowView(placing: idx + 1, entry: entry, type: leaderboardType)
-                        }
                     }
                     .padding(.horizontal, 24)
+                    .padding(.top, 20)
+
+                    // MARK: Rows
+                    if isLoading {
+                        ProgressView().padding(.vertical, 40)
+                    } else if leaderboardEntries.isEmpty {
+                        Text(loadFailed
+                             ? "Couldn't load leaderboard — check your connection"
+                             : "Add friends to see the leaderboard")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.vertical, 40)
+                            .padding(.horizontal, 24)
+                    } else {
+                        VStack(spacing: 8) {
+                            ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, entry in
+                                LeaderboardRowView(placing: idx + 1, entry: entry, type: leaderboardType)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
         }
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
         .task(id: leaderboardType) {
@@ -1304,6 +1317,32 @@ struct LeaderboardView: View {
                 leaderboardEntries = []
             }
             isLoading = false
+            await loadFirstPlaceStory()
+        }
+        .onChange(of: leaderboardType) {
+            Task { await loadFirstPlaceStory() }
+        }
+    }
+
+    private func loadFirstPlaceStory() async {
+        guard let firstPlace = sorted.first else {
+            firstPlaceImage = nil
+            return
+        }
+        let storyService = StoryService.shared
+        let story: Story?
+        if firstPlace.isCurrentUser {
+            story = storyService.myStories.first
+        } else {
+            story = storyService.userStories.first { $0.uid == firstPlace.id }?.stories.first
+        }
+        guard let story else {
+            firstPlaceImage = nil
+            return
+        }
+        let image = await storyService.loadImage(for: story)
+        withAnimation(.easeInOut(duration: 0.4)) {
+            firstPlaceImage = image
         }
     }
 }
