@@ -522,14 +522,19 @@ struct HomeView: View {
         }
         // Start/refresh story listeners as soon as the friends list is ready
         // and whenever it changes (friend added or removed).
+        // Also pre-fetch avatar images so they're ready before the user scrolls.
         .onChange(of: viewModel.isLoading) { _, loading in
             if !loading {
-                storyService.startListening(friendUIDs: viewModel.friends.map { $0.uid })
+                let uids = viewModel.friends.map { $0.uid }
+                storyService.startListening(friendUIDs: uids)
+                AvatarCache.shared.prefetch(uids: uids)
             }
         }
         .onChange(of: viewModel.friends.count) { _, _ in
             guard !viewModel.isLoading else { return }
-            storyService.startListening(friendUIDs: viewModel.friends.map { $0.uid })
+            let uids = viewModel.friends.map { $0.uid }
+            storyService.startListening(friendUIDs: uids)
+            AvatarCache.shared.prefetch(uids: uids)
         }
         .overlay {
             if showMyStoryViewer, !storyService.myStories.isEmpty {
@@ -704,15 +709,7 @@ struct FriendRow: View {
         .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
         .task(id: friend.uid) {
-            if let cached = Self.imageCache[friend.uid] {
-                profileImage = cached
-                return
-            }
-            let ref = Storage.storage().reference().child("profile_images/\(friend.uid).jpg")
-            guard let data  = try? await ref.data(maxSize: 5 * 1024 * 1024),
-                  let image = UIImage(data: data) else { return }
-            Self.imageCache[friend.uid] = image
-            profileImage = image
+            profileImage = await AvatarCache.shared.fetch(uid: friend.uid)
         }
     }
 
@@ -720,8 +717,6 @@ struct FriendRow: View {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
     }
-
-    static var imageCache: [String: UIImage] = [:]
 }
 
 // MARK: - Streak Badge
@@ -773,15 +768,7 @@ struct FriendDetailSheet: View {
             }
             .padding(.top, 30)
             .task(id: friend.uid) {
-                if let cached = FriendRow.imageCache[friend.uid] {
-                    profileImage = cached
-                    return
-                }
-                let ref = Storage.storage().reference().child("profile_images/\(friend.uid).jpg")
-                guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
-                      let image = UIImage(data: data) else { return }
-                FriendRow.imageCache[friend.uid] = image
-                profileImage = image
+                profileImage = await AvatarCache.shared.fetch(uid: friend.uid)
             }
 
             Text(friend.name)
@@ -1033,15 +1020,7 @@ struct UserSearchRow: View {
         .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
         .task(id: user.id) {
-            if let cached = Self.imageCache[user.id] {
-                profileImage = cached
-                return
-            }
-            let ref = Storage.storage().reference().child("profile_images/\(user.id).jpg")
-            guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
-                  let image = UIImage(data: data) else { return }
-            Self.imageCache[user.id] = image
-            profileImage = image
+            profileImage = await AvatarCache.shared.fetch(uid: user.id)
         }
     }
 
@@ -1049,8 +1028,6 @@ struct UserSearchRow: View {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
     }
-
-    private static var imageCache: [String: UIImage] = [:]
 }
 
 // MARK: - User Profile Sheet
@@ -1516,15 +1493,7 @@ struct LeaderboardAvatarView: View {
         }
         .task(id: entry.id) {
             guard !entry.isCurrentUser else { return }
-            if let cached = Self.imageCache[entry.id] {
-                friendImage = cached
-                return
-            }
-            let ref = Storage.storage().reference().child("profile_images/\(entry.id).jpg")
-            guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
-                  let image = UIImage(data: data) else { return }
-            Self.imageCache[entry.id] = image
-            friendImage = image
+            friendImage = await AvatarCache.shared.fetch(uid: entry.id)
         }
     }
 
@@ -1532,8 +1501,6 @@ struct LeaderboardAvatarView: View {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
     }
-
-    private static var imageCache: [String: UIImage] = [:]
 }
 
 // MARK: - Keyboard Helpers
@@ -2098,12 +2065,7 @@ struct StoryAvatarImage: View {
             }
         }
         .task(id: uid) {
-            if let cached = Self.imageCache[uid] { image = cached; return }
-            let ref = Storage.storage().reference().child("profile_images/\(uid).jpg")
-            guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
-                  let img = UIImage(data: data) else { return }
-            Self.imageCache[uid] = img
-            image = img
+            image = await AvatarCache.shared.fetch(uid: uid)
         }
     }
 
@@ -2111,8 +2073,6 @@ struct StoryAvatarImage: View {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
     }
-
-    private static var imageCache: [String: UIImage] = [:]
 }
 
 // MARK: - Story Viewer
