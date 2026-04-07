@@ -14,6 +14,13 @@ struct AuthView: View {
     @State private var isLoading = false
     @State private var showPasswordReset = false
     @State private var logoRotation: Double = 0
+    @FocusState private var focusedField: AuthField?
+
+    private enum AuthField { case username, email, password }
+
+    private func spin() {
+        withAnimation(.easeInOut(duration: 0.5)) { logoRotation += 360 }
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -59,6 +66,7 @@ struct AuthView: View {
                     TextField("Username", text: $username)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
+                        .focused($focusedField, equals: .username)
                         .padding()
                         .background(GlassBackground(cornerRadius: 10))
                         .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
@@ -68,11 +76,13 @@ struct AuthView: View {
                     .keyboardType(.emailAddress)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .focused($focusedField, equals: .email)
                     .padding()
                     .background(GlassBackground(cornerRadius: 10))
                     .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
                 SecureField("Password", text: $password)
+                    .focused($focusedField, equals: .password)
                     .padding()
                     .background(GlassBackground(cornerRadius: 10))
                     .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
@@ -99,7 +109,7 @@ struct AuthView: View {
             }
 
             // Primary action
-            Button(action: submit) {
+            Button(action: { spin(); submit() }) {
                 Group {
                     if isLoading {
                         ProgressView().tint(.white)
@@ -125,6 +135,7 @@ struct AuthView: View {
 
             // Toggle mode
             Button(action: {
+                spin()
                 isSignUp.toggle()
                 errorMessage = ""
             }) {
@@ -136,6 +147,9 @@ struct AuthView: View {
             }
 
             Spacer()
+        }
+        .onChange(of: focusedField) { _, newField in
+            if newField != nil { spin() }
         }
         .contentShape(Rectangle())
         .onTapGesture {
