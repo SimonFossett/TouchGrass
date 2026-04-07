@@ -39,10 +39,15 @@ class FirebaseManager {
     var currentUID: String? { Auth.auth().currentUser?.uid }
 
     private var authListener: AuthStateDidChangeListenerHandle?
+    // Prevents the auth state listener from flipping isAuthenticated during
+    // the sign-up flow, which creates and possibly deletes an account before
+    // the username check completes.
+    private var suppressAuthStateChanges = false
 
     private init() {
         authListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
-            self?.isAuthenticated = user != nil
+            guard let self, !self.suppressAuthStateChanges else { return }
+            self.isAuthenticated = user != nil
         }
     }
 
@@ -51,6 +56,12 @@ class FirebaseManager {
         guard username.wholeMatch(of: usernameRegex) != nil else {
             throw AuthError.invalidUsername
         }
+
+        // Suppress the auth listener for the duration of sign-up. Without this,
+        // createUser immediately fires isAuthenticated = true and ContentView
+        // navigates away before the username check can show an error.
+        suppressAuthStateChanges = true
+        defer { suppressAuthStateChanges = false }
 
         // Create the Auth account first so the user is authenticated — Firestore
         // rules require auth for reads, so the username check must happen after this.
@@ -71,6 +82,9 @@ class FirebaseManager {
                 "stepScore": 0,
                 "createdAt": FieldValue.serverTimestamp()
             ])
+
+            // Sign-up fully succeeded — now allow navigation to the main app.
+            isAuthenticated = true
         } catch {
             // Clean up the auth account if anything after creation fails.
             try? await result.user.delete()
