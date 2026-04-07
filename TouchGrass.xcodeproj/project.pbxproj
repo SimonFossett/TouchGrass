@@ -301,6 +301,7 @@
 				CODE_SIGN_ENTITLEMENTS = TouchGrass/TouchGrass.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DDQW9H7NS9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TouchGrass/Info.plist;
@@ -329,6 +330,7 @@
 				CODE_SIGN_ENTITLEMENTS = TouchGrass/TouchGrass.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DDQW9H7NS9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TouchGrass/Info.plist;
