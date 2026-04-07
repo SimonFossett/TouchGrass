@@ -472,10 +472,15 @@ struct HomeView: View {
             }
             .ignoresSafeArea()
         }
-        .onChange(of: viewModel.friends.count) { _, _ in
-            storyService.startListening(friendUIDs: viewModel.friends.map { $0.uid })
+        // Start/refresh story listeners as soon as the friends list is ready
+        // and whenever it changes (friend added or removed).
+        .onChange(of: viewModel.isLoading) { _, loading in
+            if !loading {
+                storyService.startListening(friendUIDs: viewModel.friends.map { $0.uid })
+            }
         }
-        .task {
+        .onChange(of: viewModel.friends.count) { _, _ in
+            guard !viewModel.isLoading else { return }
             storyService.startListening(friendUIDs: viewModel.friends.map { $0.uid })
         }
         .overlay {
@@ -1767,8 +1772,9 @@ struct ExploreStoriesSection: View {
                     MyStoryBubble(
                         profileImage: profileManager.profileImage,
                         hasStory: !myStories.isEmpty,
-                        onTap: { myStories.isEmpty ? onAddStory() : onTapMyStory() },
-                        onLongPress: onAddStory
+                        // No active story → open camera. Active story → view it.
+                        // Long-press is intentionally absent: one story per 24 h.
+                        onTap: { myStories.isEmpty ? onAddStory() : onTapMyStory() }
                     )
 
                     // Friend story bubbles
@@ -1791,14 +1797,13 @@ struct MyStoryBubble: View {
     let profileImage: UIImage?
     let hasStory: Bool
     let onTap: () -> Void
-    let onLongPress: () -> Void
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 8) {
                 ZStack(alignment: .bottomTrailing) {
                     ZStack {
-                        // Story ring when user has a story
+                        // Green ring once a story is active
                         if hasStory {
                             Circle()
                                 .stroke(
@@ -1830,7 +1835,7 @@ struct MyStoryBubble: View {
                     }
                     .frame(width: 76, height: 76)
 
-                    // + badge when no story
+                    // + badge only while there is no active story
                     if !hasStory {
                         Circle()
                             .fill(Color.blue)
@@ -1853,9 +1858,6 @@ struct MyStoryBubble: View {
             .frame(width: 80)
         }
         .buttonStyle(.plain)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5).onEnded { _ in onLongPress() }
-        )
     }
 }
 
