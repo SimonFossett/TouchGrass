@@ -9,7 +9,6 @@ import SwiftUI
 import MapKit
 import CoreMotion
 import Charts
-import PhotosUI
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
@@ -309,8 +308,7 @@ struct HomeView: View {
     private let storyService = StoryService.shared
     @State private var activeStoryUserIndex: Int? = nil
     @State private var showMyStoryViewer = false
-    @State private var showAddStory = false
-    @State private var addStoryItem: PhotosPickerItem? = nil
+    @State private var showStoryCamera = false
     @State private var isUploadingStory = false
 
     var filteredFriends: [Friend] {
@@ -396,7 +394,7 @@ struct HomeView: View {
                             friendStories: storyService.userStories,
                             onTapMyStory: { showMyStoryViewer = true },
                             onTapFriendStory: { idx in activeStoryUserIndex = idx },
-                            onAddStory: { showAddStory = true }
+                            onAddStory: { showStoryCamera = true }
                         )
 
                         // MARK: Pending friend requests (always at top)
@@ -461,17 +459,18 @@ struct HomeView: View {
         .sheet(isPresented: $showEditProfile) {
             EditProfileView()
         }
-        .photosPicker(isPresented: $showAddStory, selection: $addStoryItem, matching: .images)
-        .onChange(of: addStoryItem) { _, item in
-            guard let item else { return }
-            Task {
-                guard let data = try? await item.loadTransferable(type: Data.self),
-                      let image = UIImage(data: data) else { addStoryItem = nil; return }
-                isUploadingStory = true
-                try? await storyService.postStory(image: image)
-                isUploadingStory = false
-                addStoryItem = nil
+        .fullScreenCover(isPresented: $showStoryCamera) {
+            DualCameraView { compositeImage in
+                showStoryCamera = false
+                Task {
+                    isUploadingStory = true
+                    try? await storyService.postStory(image: compositeImage)
+                    isUploadingStory = false
+                }
+            } onDismiss: {
+                showStoryCamera = false
             }
+            .ignoresSafeArea()
         }
         .onChange(of: viewModel.friends.count) { _, _ in
             storyService.startListening(friendUIDs: viewModel.friends.map { $0.uid })
