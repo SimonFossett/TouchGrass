@@ -63,7 +63,7 @@ struct ContentView: View {
             .padding(.horizontal, 36)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity)
-            .background(GlassBackground(cornerRadius: 22))
+            .background(GlassBackground(cornerRadius: 22, showReflection: selectedTab == .map))
             .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
