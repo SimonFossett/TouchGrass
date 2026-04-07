@@ -13,10 +13,23 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 
+// MARK: - Tab Bar Visibility Environment Key
+
+private struct HideTabBarKey: EnvironmentKey {
+    static let defaultValue: Binding<Bool> = .constant(false)
+}
+extension EnvironmentValues {
+    fileprivate var hideTabBar: Binding<Bool> {
+        get { self[HideTabBarKey.self] }
+        set { self[HideTabBarKey.self] = newValue }
+    }
+}
+
 // MARK: - Main Content View
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
     @State private var mapViewModel = MapViewModel()
+    @State private var hideTabBar = false
     @Namespace private var tabPillNamespace
     private let firebase = FirebaseManager.shared
 
@@ -47,26 +60,30 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea(edges: .bottom)
+            .environment(\.hideTabBar, $hideTabBar)
 
-            // Tab bar floats over content
-            HStack {
-                TabBarButton(tab: .home, selectedTab: $selectedTab, systemIconName: "house", namespace: tabPillNamespace)
-                Spacer()
-                TabBarButton(tab: .search, selectedTab: $selectedTab, systemIconName: "magnifyingglass", namespace: tabPillNamespace)
-                Spacer()
-                TabBarButton(tab: .map, selectedTab: $selectedTab, systemIconName: "map", namespace: tabPillNamespace)
-                Spacer()
-                TabBarButton(tab: .leaderboard, selectedTab: $selectedTab, systemIconName: "trophy", namespace: tabPillNamespace)
-                Spacer()
-                TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person", namespace: tabPillNamespace)
+            // Tab bar floats over content — hidden during story camera/viewer
+            if !hideTabBar {
+                HStack {
+                    TabBarButton(tab: .home, selectedTab: $selectedTab, systemIconName: "house", namespace: tabPillNamespace)
+                    Spacer()
+                    TabBarButton(tab: .search, selectedTab: $selectedTab, systemIconName: "magnifyingglass", namespace: tabPillNamespace)
+                    Spacer()
+                    TabBarButton(tab: .map, selectedTab: $selectedTab, systemIconName: "map", namespace: tabPillNamespace)
+                    Spacer()
+                    TabBarButton(tab: .leaderboard, selectedTab: $selectedTab, systemIconName: "trophy", namespace: tabPillNamespace)
+                    Spacer()
+                    TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person", namespace: tabPillNamespace)
+                }
+                .padding(.horizontal, 36)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity)
+                .background(GlassBackground(cornerRadius: 22, showReflection: selectedTab == .map))
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .padding(.horizontal, 36)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity)
-            .background(GlassBackground(cornerRadius: 22, showReflection: selectedTab == .map))
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
         }
         .task { checkMotionPermission() }
         .sheet(isPresented: $showMotionSheet) {
@@ -311,6 +328,7 @@ struct HomeView: View {
     @State private var showStoryCamera = false
     @State private var isUploadingStory = false
     @State private var storyUploadError: String? = nil
+    @Environment(\.hideTabBar) private var hideTabBar
 
     var filteredFriends: [Friend] {
         let pinned   = viewModel.friends.filter {  $0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
@@ -550,6 +568,15 @@ struct HomeView: View {
             Button("OK") {}
         } message: {
             Text(viewModel.errorMessage ?? "")
+        }
+        .onChange(of: showStoryCamera) { _, new in
+            withAnimation(.easeInOut(duration: 0.2)) { hideTabBar.wrappedValue = new }
+        }
+        .onChange(of: showMyStoryViewer) { _, new in
+            withAnimation(.easeInOut(duration: 0.2)) { hideTabBar.wrappedValue = new }
+        }
+        .onChange(of: activeStoryUserIndex) { _, new in
+            withAnimation(.easeInOut(duration: 0.2)) { hideTabBar.wrappedValue = new != nil }
         }
     }
 }
