@@ -256,7 +256,7 @@ struct MapScreen: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(GlassBackground(cornerRadius: 12))
+                    .background(GlassBackground(cornerRadius: 12, showReflection: true))
                     .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
                     .padding()
                 }
