@@ -9,6 +9,7 @@ import CoreLocation
 import Observation
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 
 // MARK: - Friend Model
 struct Friend: Identifiable {
@@ -145,10 +146,60 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
     }
 }
 
+// MARK: - Map Avatar View
+
+struct MapAvatarView: View {
+    let uid: String
+    let name: String
+    let borderColor: Color
+
+    @State private var profileImage: UIImage? = nil
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(avatarColor(for: name))
+                .frame(width: 44, height: 44)
+            if let img = profileImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 44, height: 44)
+                    .clipShape(Circle())
+            } else {
+                Text(String(name.prefix(1)).uppercased())
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .overlay(Circle().stroke(borderColor, lineWidth: 2.5))
+        .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+        .task(id: uid) {
+            if let cached = FriendRow.imageCache[uid] {
+                profileImage = cached
+                return
+            }
+            let ref = Storage.storage().reference().child("profile_images/\(uid).jpg")
+            guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
+                  let image = UIImage(data: data) else { return }
+            FriendRow.imageCache[uid] = image
+            profileImage = image
+        }
+    }
+
+    private func avatarColor(for name: String) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
+        return colors[abs(name.hashValue) % colors.count]
+    }
+}
+
 // MARK: - Map View
 struct MapScreen: View {
     @State var viewModel: MapViewModel
     private let stepManager = StepCounterManager.shared
+
+    @State private var currentUID: String? = Auth.auth().currentUser?.uid
+    @State private var currentUsername: String = ""
 
     // Only show friends who have a real GPS fix (lat/lng both non-zero)
     private var friendsOnMap: [Friend] {
@@ -158,13 +209,25 @@ struct MapScreen: View {
     var body: some View {
         ZStack {
             Map(position: $viewModel.position) {
-                UserAnnotation()
+                // Current user annotation
+                if let loc = viewModel.userLocation, let uid = currentUID, !currentUsername.isEmpty {
+                    Annotation("You", coordinate: loc) {
+                        VStack(spacing: 2) {
+                            MapAvatarView(uid: uid, name: currentUsername, borderColor: .green)
+                            Text("You")
+                                .font(.caption)
+                                .padding(2)
+                                .background(Color.white.opacity(0.8))
+                                .cornerRadius(5)
+                        }
+                    }
+                } else {
+                    UserAnnotation()
+                }
                 ForEach(friendsOnMap) { friend in
                     Annotation(friend.name, coordinate: friend.coordinate) {
                         VStack(spacing: 2) {
-                            Image(systemName: "person.circle.fill")
-                                .foregroundColor(.blue)
-                                .font(.title)
+                            MapAvatarView(uid: friend.uid, name: friend.name, borderColor: .white)
                             Text(friend.name)
                                 .font(.caption)
                                 .padding(2)
@@ -175,6 +238,11 @@ struct MapScreen: View {
                 }
             }
             .edgesIgnoringSafeArea(.all)
+            .task {
+                if let user = try? await UserService.shared.fetchCurrentUser() {
+                    currentUsername = user.username
+                }
+            }
 
             // Step counter overlay
             VStack {
