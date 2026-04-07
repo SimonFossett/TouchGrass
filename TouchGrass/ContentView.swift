@@ -612,6 +612,8 @@ struct FriendRequestRow: View {
     let onAccept: () -> Void
     let onDecline: () -> Void
 
+    @State private var profileImage: UIImage? = nil
+
     var body: some View {
         HStack(spacing: 14) {
             ZStack {
@@ -621,6 +623,13 @@ struct FriendRequestRow: View {
                 Text(String(user.username.prefix(1)).uppercased())
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white)
+                if let img = profileImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 52, height: 52)
+                        .clipShape(Circle())
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -655,6 +664,9 @@ struct FriendRequestRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
+        .task(id: user.id) {
+            profileImage = await AvatarCache.shared.fetch(uid: user.id)
+        }
     }
 
     func avatarColor(for name: String) -> Color {
