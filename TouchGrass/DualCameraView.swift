@@ -477,12 +477,74 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
             stack.heightAnchor.constraint(equalToConstant: 54)
         ])
 
-        let retakeBtn = makeButton(title: "Retake",     bg: UIColor.white.withAlphaComponent(0.18))
-        let postBtn   = makeButton(title: "Post Story", bg: UIColor(red: 0.10, green: 0.75, blue: 0.32, alpha: 1))
+        let retakeBtn = makeButton(title: "Retake", bg: UIColor.white.withAlphaComponent(0.18))
         retakeBtn.addTarget(self, action: #selector(retakeTapped), for: .touchUpInside)
-        postBtn.addTarget(self,   action: #selector(postTapped),   for: .touchUpInside)
         stack.addArrangedSubview(retakeBtn)
-        stack.addArrangedSubview(postBtn)
+
+        // Right slot — starts in "Analyzing…" state while the AI runs.
+        let postArea = UIView()
+        postArea.translatesAutoresizingMaskIntoConstraints = false
+        stack.addArrangedSubview(postArea)
+
+        let spinner = UIActivityIndicatorView(style: .medium)
+        spinner.color = .white
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.startAnimating()
+        postArea.addSubview(spinner)
+
+        let analyzingLabel = UILabel()
+        analyzingLabel.text      = "Analyzing…"
+        analyzingLabel.textColor = UIColor.white.withAlphaComponent(0.75)
+        analyzingLabel.font      = .systemFont(ofSize: 13, weight: .medium)
+        analyzingLabel.textAlignment = .center
+        analyzingLabel.translatesAutoresizingMaskIntoConstraints = false
+        postArea.addSubview(analyzingLabel)
+
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: postArea.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: postArea.centerYAnchor, constant: -10),
+            analyzingLabel.centerXAnchor.constraint(equalTo: postArea.centerXAnchor),
+            analyzingLabel.topAnchor.constraint(equalTo: spinner.bottomAnchor, constant: 4)
+        ])
+
+        // Run outdoor detection; swap the right slot once the result is ready.
+        OutdoorDetector.isOutdoor(image: composite) { [weak self, weak postArea] outdoor in
+            DispatchQueue.main.async {
+                guard let self, let postArea else { return }
+                postArea.subviews.forEach { $0.removeFromSuperview() }
+
+                if outdoor {
+                    let postBtn = self.makeButton(
+                        title: "Post Story",
+                        bg: UIColor(red: 0.10, green: 0.75, blue: 0.32, alpha: 1)
+                    )
+                    postBtn.addTarget(self, action: #selector(self.postTapped), for: .touchUpInside)
+                    postBtn.translatesAutoresizingMaskIntoConstraints = false
+                    postArea.addSubview(postBtn)
+                    NSLayoutConstraint.activate([
+                        postBtn.topAnchor.constraint(equalTo: postArea.topAnchor),
+                        postBtn.bottomAnchor.constraint(equalTo: postArea.bottomAnchor),
+                        postBtn.leadingAnchor.constraint(equalTo: postArea.leadingAnchor),
+                        postBtn.trailingAnchor.constraint(equalTo: postArea.trailingAnchor)
+                    ])
+                } else {
+                    // Not outdoors — block posting and nudge the user outside.
+                    let goLabel = UILabel()
+                    goLabel.text          = "🌿 Go outside first!"
+                    goLabel.textColor     = UIColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1)
+                    goLabel.font          = .systemFont(ofSize: 14, weight: .semibold)
+                    goLabel.textAlignment = .center
+                    goLabel.numberOfLines = 2
+                    goLabel.translatesAutoresizingMaskIntoConstraints = false
+                    postArea.addSubview(goLabel)
+                    NSLayoutConstraint.activate([
+                        goLabel.centerYAnchor.constraint(equalTo: postArea.centerYAnchor),
+                        goLabel.leadingAnchor.constraint(equalTo: postArea.leadingAnchor, constant: 4),
+                        goLabel.trailingAnchor.constraint(equalTo: postArea.trailingAnchor, constant: -4)
+                    ])
+                }
+            }
+        }
     }
 
     @objc private func retakeTapped() {
