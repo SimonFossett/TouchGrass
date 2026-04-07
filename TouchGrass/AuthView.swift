@@ -13,6 +13,7 @@ struct AuthView: View {
     @State private var errorMessage = ""
     @State private var isLoading = false
     @State private var showPasswordReset = false
+    @State private var logoRotation: Double = 0
 
     var body: some View {
         VStack(spacing: 24) {
@@ -38,6 +39,12 @@ struct AuthView: View {
                         .scaledToFit()
                         .frame(width: 88, height: 88)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
+                        .rotationEffect(.degrees(logoRotation))
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.5)) {
+                                logoRotation += 360
+                            }
+                        }
                 }
                 Text("TouchGrass")
                     .font(.largeTitle)
