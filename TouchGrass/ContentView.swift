@@ -310,6 +310,7 @@ struct HomeView: View {
     @State private var showMyStoryViewer = false
     @State private var showStoryCamera = false
     @State private var isUploadingStory = false
+    @State private var storyUploadError: String? = nil
 
     var filteredFriends: [Friend] {
         let pinned   = viewModel.friends.filter {  $0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
@@ -461,16 +462,45 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $showStoryCamera) {
             DualCameraView { compositeImage in
+                // Dismiss camera immediately so the user isn't left on a blank screen.
                 showStoryCamera = false
                 Task {
                     isUploadingStory = true
-                    try? await storyService.postStory(image: compositeImage)
+                    do {
+                        try await storyService.postStory(image: compositeImage)
+                    } catch {
+                        storyUploadError = error.localizedDescription
+                    }
                     isUploadingStory = false
                 }
             } onDismiss: {
                 showStoryCamera = false
             }
             .ignoresSafeArea()
+        }
+        // Upload spinner — sits on top of everything while the story is being sent
+        .overlay {
+            if isUploadingStory {
+                ZStack {
+                    Color.black.opacity(0.45).ignoresSafeArea()
+                    VStack(spacing: 14) {
+                        ProgressView().tint(.white).scaleEffect(1.4)
+                        Text("Posting story…")
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                    }
+                    .padding(28)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }
+            }
+        }
+        .alert("Story Upload Failed", isPresented: Binding(
+            get: { storyUploadError != nil },
+            set: { if !$0 { storyUploadError = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(storyUploadError ?? "")
         }
         // Start/refresh story listeners as soon as the friends list is ready
         // and whenever it changes (friend added or removed).
