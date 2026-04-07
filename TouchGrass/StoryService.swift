@@ -69,7 +69,13 @@ class StoryService {
     func startListening(friendUIDs: [String]) {
         listeners.forEach { $0.remove() }
         listeners.removeAll()
-        // Don't wipe userStories immediately — let snapshot updates repopulate
+
+        // Immediately remove any cached stories for UIDs that are no longer in
+        // the friend list. Without this, a singleton StoryService retains the
+        // previous session's stories when a friendless account logs in (or when
+        // a friend is removed), because no snapshot ever fires to clear them.
+        let newSet = Set(friendUIDs)
+        userStories.removeAll { !newSet.contains($0.uid) }
 
         guard let myUID = Auth.auth().currentUser?.uid else { return }
 
