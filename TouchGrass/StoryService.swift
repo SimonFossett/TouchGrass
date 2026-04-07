@@ -61,14 +61,18 @@ class StoryService {
         // Don't wipe userStories immediately — let snapshot updates repopulate
 
         guard let myUID = Auth.auth().currentUser?.uid else { return }
-        let expiryThreshold = Timestamp(date: Date())
+
+        // NOTE: We intentionally omit the expiresAt range filter here.
+        // Combining whereField equality + range on a different field requires a
+        // Firestore composite index. Skipping it avoids that requirement and lets
+        // us filter expired stories client-side in parseStories().
 
         // My own stories
         let myListener = db.collection("stories")
             .whereField("uid", isEqualTo: myUID)
-            .whereField("expiresAt", isGreaterThan: expiryThreshold)
-            .addSnapshotListener { [weak self] snapshot, _ in
+            .addSnapshotListener { [weak self] snapshot, error in
                 guard let self else { return }
+                if let error { print("[StoryService] myStories error: \(error)"); return }
                 let stories = self.parseStories(from: snapshot?.documents ?? [])
                 DispatchQueue.main.async { self.myStories = stories }
             }
@@ -78,9 +82,9 @@ class StoryService {
         for uid in friendUIDs {
             let listener = db.collection("stories")
                 .whereField("uid", isEqualTo: uid)
-                .whereField("expiresAt", isGreaterThan: expiryThreshold)
-                .addSnapshotListener { [weak self] snapshot, _ in
+                .addSnapshotListener { [weak self] snapshot, error in
                     guard let self else { return }
+                    if let error { print("[StoryService] friend \(uid) error: \(error)"); return }
                     let stories = self.parseStories(from: snapshot?.documents ?? [])
                     DispatchQueue.main.async {
                         if stories.isEmpty {
@@ -157,7 +161,8 @@ class StoryService {
     // MARK: - Private Helpers
 
     private func parseStories(from docs: [QueryDocumentSnapshot]) -> [Story] {
-        docs.compactMap { doc -> Story? in
+        let now = Date()
+        return docs.compactMap { doc -> Story? in
             let data = doc.data()
             guard let uid      = data["uid"]       as? String,
                   let username = data["username"]  as? String,
@@ -172,7 +177,9 @@ class StoryService {
                 createdAt: createdTS.dateValue(),
                 expiresAt: expiresTS.dateValue()
             )
-        }.sorted { $0.createdAt < $1.createdAt }
+        }
+        .filter { $0.expiresAt > now }        // discard stories older than 24 h
+        .sorted { $0.createdAt < $1.createdAt }
     }
 
     private func fetchUsername(uid: String) async throws -> String {
