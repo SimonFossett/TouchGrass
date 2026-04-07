@@ -411,6 +411,12 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
     private func showPreview() {
         guard let back = backPhoto else { captureButton.isEnabled = true; return }
 
+        // Hide live-camera UI so the AVCaptureVideoPreviewLayer (GPU-composited)
+        // can't render on top of the preview screen.
+        pipContainerView.isHidden = true
+        captureButton.isHidden    = true
+        closeButton.isHidden      = true
+
         let composite: UIImage
         if let front = frontPhoto {
             composite = createComposite(back: back, front: front)
@@ -485,7 +491,12 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         backPhoto  = nil
         frontPhoto = nil
         pendingComposite = nil
-        captureButton.isEnabled = true
+
+        // Restore live-camera UI
+        pipContainerView.isHidden = !isMultiCam  // only show PiP if dual-cam is active
+        captureButton.isHidden    = false
+        captureButton.isEnabled   = true
+        closeButton.isHidden      = false
     }
 
     @objc private func postTapped() {
