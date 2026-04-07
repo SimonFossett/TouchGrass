@@ -987,6 +987,7 @@ enum FriendRequestStatus {
 struct UserSearchRow: View {
     let user: AppUser
     let status: FriendRequestStatus
+    @State private var profileImage: UIImage?
 
     var body: some View {
         HStack(spacing: 14) {
@@ -994,9 +995,17 @@ struct UserSearchRow: View {
                 Circle()
                     .fill(avatarColor(for: user.username))
                     .frame(width: 52, height: 52)
-                Text(String(user.username.prefix(1)).uppercased())
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
+                if let img = profileImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 52, height: 52)
+                        .clipShape(Circle())
+                } else {
+                    Text(String(user.username.prefix(1)).uppercased())
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                }
             }
 
             Text(user.username)
@@ -1023,12 +1032,25 @@ struct UserSearchRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
+        .task(id: user.id) {
+            if let cached = Self.imageCache[user.id] {
+                profileImage = cached
+                return
+            }
+            let ref = Storage.storage().reference().child("profile_images/\(user.id).jpg")
+            guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
+                  let image = UIImage(data: data) else { return }
+            Self.imageCache[user.id] = image
+            profileImage = image
+        }
     }
 
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
     }
+
+    private static var imageCache: [String: UIImage] = [:]
 }
 
 // MARK: - User Profile Sheet
