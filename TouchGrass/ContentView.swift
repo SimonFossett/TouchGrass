@@ -694,7 +694,7 @@ struct FriendRow: View {
         return colors[abs(name.hashValue) % colors.count]
     }
 
-    private static var imageCache: [String: UIImage] = [:]
+    static var imageCache: [String: UIImage] = [:]
 }
 
 // MARK: - Streak Badge
@@ -723,6 +723,7 @@ struct FriendDetailSheet: View {
     let onRemove: () -> Void
 
     @State private var showRemoveConfirm = false
+    @State private var profileImage: UIImage? = nil
 
     var body: some View {
         VStack(spacing: 24) {
@@ -731,11 +732,30 @@ struct FriendDetailSheet: View {
                 Circle()
                     .fill(avatarColor(for: friend.name))
                     .frame(width: 100, height: 100)
-                Text(String(friend.name.prefix(1)).uppercased())
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundColor(.white)
+                if let img = profileImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 100, height: 100)
+                        .clipShape(Circle())
+                } else {
+                    Text(String(friend.name.prefix(1)).uppercased())
+                        .font(.system(size: 40, weight: .semibold))
+                        .foregroundColor(.white)
+                }
             }
             .padding(.top, 30)
+            .task(id: friend.uid) {
+                if let cached = FriendRow.imageCache[friend.uid] {
+                    profileImage = cached
+                    return
+                }
+                let ref = Storage.storage().reference().child("profile_images/\(friend.uid).jpg")
+                guard let data = try? await ref.data(maxSize: 5 * 1024 * 1024),
+                      let image = UIImage(data: data) else { return }
+                FriendRow.imageCache[friend.uid] = image
+                profileImage = image
+            }
 
             Text(friend.name)
                 .font(.title2)
