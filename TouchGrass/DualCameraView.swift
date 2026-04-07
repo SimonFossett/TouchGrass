@@ -278,7 +278,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         pipWidthConstraint  = pipContainerView.widthAnchor.constraint(equalToConstant: pipSize.width)
         pipHeightConstraint = pipContainerView.heightAnchor.constraint(equalToConstant: pipSize.height)
         NSLayoutConstraint.activate([
-            pipContainerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 56),
+            pipContainerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             pipContainerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             pipWidthConstraint!,
             pipHeightConstraint!
