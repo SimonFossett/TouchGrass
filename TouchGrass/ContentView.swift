@@ -1387,7 +1387,7 @@ struct LeaderboardRowView: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(placingColor)
                 .frame(width: 62, height: 56)
-                .background(glassBackground)
+                .background(rowBackground)
                 .cornerRadius(10)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
@@ -1421,7 +1421,7 @@ struct LeaderboardRowView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 56)
-            .background(glassBackground)
+            .background(rowBackground)
             .cornerRadius(10)
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -1430,16 +1430,8 @@ struct LeaderboardRowView: View {
         }
     }
 
-    @ViewBuilder
-    private var glassBackground: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(.ultraThinMaterial)
-            if entry.isCurrentUser {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.blue.opacity(0.08))
-            }
-        }
+    private var rowBackground: Color {
+        entry.isCurrentUser ? Color.blue.opacity(0.06) : Color(UIColor.systemBackground)
     }
 
     private var placingColor: Color {
