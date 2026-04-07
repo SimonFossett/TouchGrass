@@ -26,9 +26,9 @@ struct AuthView: View {
                         .fill(Color.green.opacity(0.18))
                         .frame(width: 118, height: 118)
 
-                    // White border circle with shadow
+                    // Background circle that adapts to light/dark mode
                     Circle()
-                        .fill(Color.white)
+                        .fill(Color(uiColor: .systemBackground))
                         .frame(width: 100, height: 100)
                         .shadow(color: Color.green.opacity(0.5), radius: 14, x: 0, y: 4)
 
