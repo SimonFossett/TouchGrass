@@ -634,6 +634,7 @@ struct FriendRequestRow: View {
 // MARK: - Friend Row
 struct FriendRow: View {
     let friend: Friend
+    @State private var profileImage: UIImage? = nil
 
     var body: some View {
         HStack(spacing: 14) {
@@ -641,9 +642,17 @@ struct FriendRow: View {
                 Circle()
                     .fill(avatarColor(for: friend.name))
                     .frame(width: 52, height: 52)
-                Text(String(friend.name.prefix(1)).uppercased())
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
+                if let img = profileImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 52, height: 52)
+                        .clipShape(Circle())
+                } else {
+                    Text(String(friend.name.prefix(1)).uppercased())
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                }
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -660,7 +669,6 @@ struct FriendRow: View {
 
             Spacer()
 
-            // Streak fire icon
             if friend.streak > 0 {
                 StreakBadge(streak: friend.streak)
             }
@@ -668,12 +676,25 @@ struct FriendRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
+        .task(id: friend.uid) {
+            if let cached = Self.imageCache[friend.uid] {
+                profileImage = cached
+                return
+            }
+            let ref = Storage.storage().reference().child("profile_images/\(friend.uid).jpg")
+            guard let data  = try? await ref.data(maxSize: 5 * 1024 * 1024),
+                  let image = UIImage(data: data) else { return }
+            Self.imageCache[friend.uid] = image
+            profileImage = image
+        }
     }
 
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
     }
+
+    private static var imageCache: [String: UIImage] = [:]
 }
 
 // MARK: - Streak Badge
