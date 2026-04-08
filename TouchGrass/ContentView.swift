@@ -1051,6 +1051,7 @@ struct UserProfileSheet: View {
     @State private var isLoadingStatus = true
     @State private var isSending = false
     @State private var errorMessage: String? = nil
+    @State private var profileImage: UIImage? = nil
 
     var body: some View {
         VStack(spacing: 24) {
@@ -1061,6 +1062,13 @@ struct UserProfileSheet: View {
                 Text(String(user.username.prefix(1)).uppercased())
                     .font(.system(size: 40, weight: .semibold))
                     .foregroundColor(.white)
+                if let img = profileImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 100, height: 100)
+                        .clipShape(Circle())
+                }
             }
             .padding(.top, 30)
 
@@ -1104,6 +1112,9 @@ struct UserProfileSheet: View {
         .task {
             status = await FriendService.shared.status(for: user.id)
             isLoadingStatus = false
+        }
+        .task(id: user.id) {
+            profileImage = await AvatarCache.shared.fetch(uid: user.id)
         }
         .alert("Something went wrong", isPresented: Binding(
             get: { errorMessage != nil },
