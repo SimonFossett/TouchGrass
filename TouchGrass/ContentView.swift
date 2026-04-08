@@ -228,18 +228,6 @@ struct CustomTabBarView: View {
                 .onChanged { value in
                     isDragging = true
                     dragOffset = value.translation.width
-
-                    // Live-switch to the nearest tab as the finger crosses midpoints.
-                    guard let nearest = nearestTab(to: value.location.x),
-                          nearest != selectedTab else { return }
-                    // Compensate dragOffset so the pill doesn't jump when the
-                    // base frame shifts to the new tab's position.
-                    let oldMinX = tabFrames[selectedTab]?.minX ?? 0
-                    let newMinX = tabFrames[nearest]?.minX ?? 0
-                    dragOffset += oldMinX - newMinX
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
-                        selectedTab = nearest
-                    }
                 }
                 .onEnded { value in
                     let nearest = nearestTab(to: value.location.x) ?? selectedTab
