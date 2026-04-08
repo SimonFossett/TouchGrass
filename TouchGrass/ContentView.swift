@@ -985,29 +985,64 @@ struct SearchView: View {
     @State private var selectedUser: AppUser? = nil
     @State private var isLoading = false
     @State private var searchFailed = false
+    @State private var showProfileMenu = false
+    @State private var showEditProfile = false
+    private let profileManager = ProfileImageManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
-            // Search bar
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.gray)
-                TextField("Search for users...", text: $searchText)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                if !searchText.isEmpty {
-                    Button(action: { searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.gray)
+            // Header: profile picture + search bar
+            HStack(spacing: 12) {
+                // Profile picture button
+                Button {
+                    showProfileMenu = true
+                } label: {
+                    if let img = profileManager.profileImage {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 58, height: 58)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(Color(UIColor.systemGray3))
+                            .frame(width: 58, height: 58)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 26))
+                            )
                     }
                 }
+                .confirmationDialog("", isPresented: $showProfileMenu, titleVisibility: .hidden) {
+                    Button("Edit Profile") { showEditProfile = true }
+                    Button("Sign Out", role: .destructive) {
+                        ProfileImageManager.shared.clearImage()
+                        do { try FirebaseManager.shared.signOut() } catch {}
+                    }
+                }
+
+                // Search bar
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search for users...", text: $searchText)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    if !searchText.isEmpty {
+                        Button(action: { searchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(GlassBackground(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(GlassBackground(cornerRadius: 10))
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 14)
             .background(Color(UIColor.systemGray5))
 
             if searchText.isEmpty {
@@ -1094,6 +1129,9 @@ struct SearchView: View {
                 requestStatuses[user.id] = newStatus
             }
             .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showEditProfile) {
+            EditProfileView()
         }
     }
 }
