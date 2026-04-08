@@ -424,12 +424,11 @@ class HomeViewModel {
 
 // MARK: - Home View
 struct HomeView: View {
-    @State private var searchText: String = ""
     @State private var viewModel = HomeViewModel()
     @State private var selectedFriend: Friend? = nil
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
-    @State private var showSearchBar = false
+    @State private var showFriendSearch = false
     @State private var showInbox = false
     private let profileManager = ProfileImageManager.shared
     private let storyService = StoryService.shared
@@ -441,12 +440,10 @@ struct HomeView: View {
     @Environment(\.hideTabBar)    private var hideTabBar
     @Environment(\.tabBarCompact) private var tabBarCompact
 
-    var filteredFriends: [Friend] {
+    var sortedFriends: [Friend] {
         let pinned   = viewModel.friends.filter {  $0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
         let unpinned = viewModel.friends.filter { !$0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
-        let all = pinned + unpinned
-        guard !searchText.isEmpty else { return all }
-        return all.filter { $0.name.lowercased().hasPrefix(searchText.lowercased()) }
+        return pinned + unpinned
     }
 
     var body: some View {
@@ -487,17 +484,12 @@ struct HomeView: View {
                 }
 
                 // Circular search button
-                Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        showSearchBar.toggle()
-                        if !showSearchBar { searchText = "" }
-                    }
-                } label: {
+                Button { showFriendSearch = true } label: {
                     Circle()
                         .fill(.ultraThinMaterial)
                         .frame(width: 58, height: 58)
                         .overlay(
-                            Image(systemName: showSearchBar ? "xmark" : "magnifyingglass")
+                            Image(systemName: "magnifyingglass")
                                 .font(.system(size: 20, weight: .medium))
                                 .foregroundColor(.primary)
                         )
@@ -532,31 +524,6 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
             .background(Color(UIColor.systemGray5))
-
-            // Collapsible search bar (shown when search button is active)
-            if showSearchBar {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    TextField("Search friends...", text: $searchText)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                    if !searchText.isEmpty {
-                        Button(action: { searchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
-                        }
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(GlassBackground(cornerRadius: 10))
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
-                .background(Color(UIColor.systemGray5))
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
 
             // Friends list
             if viewModel.isLoading {
@@ -604,7 +571,7 @@ struct HomeView: View {
                             }
                             .padding(.top, 60)
                         } else {
-                            ForEach(filteredFriends) { friend in
+                            ForEach(sortedFriends) { friend in
                                 FriendRow(friend: friend)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
@@ -645,6 +612,11 @@ struct HomeView: View {
         }
         .fullScreenCover(isPresented: $showInbox) {
             FriendRequestsInboxView(viewModel: viewModel)
+        }
+        .fullScreenCover(isPresented: $showFriendSearch) {
+            FriendSearchView(friends: viewModel.friends) { friend in
+                selectedFriend = friend
+            }
         }
         .fullScreenCover(isPresented: $showStoryCamera) {
             DualCameraView { compositeImage in
@@ -750,6 +722,200 @@ struct HomeView: View {
         }
         .onChange(of: activeStoryUserIndex) { _, new in
             withAnimation(.easeInOut(duration: 0.2)) { hideTabBar.wrappedValue = new != nil }
+        }
+    }
+}
+
+// MARK: - Friend Search Page
+
+struct FriendSearchView: View {
+    let friends: [Friend]
+    let onSelectFriend: (Friend) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    @State private var recentUIDs: [String] = []
+    @FocusState private var searchFocused: Bool
+
+    private let recentsKey = "recentFriendSearchUIDs"
+
+    var recentFriends: [Friend] {
+        recentUIDs.compactMap { uid in friends.first { $0.uid == uid } }
+    }
+
+    var filteredFriends: [Friend] {
+        let sorted = friends.sorted { $0.name.lowercased() < $1.name.lowercased() }
+        guard !searchText.isEmpty else { return sorted }
+        return sorted.filter { $0.name.lowercased().contains(searchText.lowercased()) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Top bar: down-chevron dismiss + search bar
+            HStack(spacing: 12) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .frame(width: 36, height: 36)
+                }
+
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    TextField("Search", text: $searchText)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .focused($searchFocused)
+                    if !searchText.isEmpty {
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(Color(UIColor.systemGray5), in: Capsule())
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color(UIColor.systemBackground))
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+
+                    // ── Recents ─────────────────────────────────────────
+                    if !recentFriends.isEmpty && searchText.isEmpty {
+                        HStack {
+                            Text("Recents")
+                                .font(.title3).fontWeight(.bold)
+                                .padding(.leading, 16)
+                            Spacer()
+                            Button("Clear All") {
+                                recentUIDs = []
+                                UserDefaults.standard.removeObject(forKey: recentsKey)
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.trailing, 16)
+                        }
+                        .padding(.top, 14)
+                        .padding(.bottom, 8)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(recentFriends) { friend in
+                                    RecentFriendCard(friend: friend)
+                                        .onTapGesture { selectFriend(friend) }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 14)
+                        }
+                    }
+
+                    // ── Friends list ─────────────────────────────────────
+                    HStack {
+                        Text(searchText.isEmpty ? "Friends" : "Results")
+                            .font(.title3).fontWeight(.bold)
+                            .padding(.leading, 16)
+                        Spacer()
+                    }
+                    .padding(.top, 14)
+                    .padding(.bottom, 4)
+
+                    if filteredFriends.isEmpty {
+                        VStack(spacing: 10) {
+                            Image(systemName: "person.slash.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray.opacity(0.4))
+                            Text("No friends found")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(filteredFriends) { friend in
+                                FriendRow(friend: friend)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { selectFriend(friend) }
+                                if friend.uid != filteredFriends.last?.uid {
+                                    Divider().padding(.leading, 74)
+                                }
+                            }
+                        }
+                        .background(Color(UIColor.systemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 16)
+                    }
+                }
+            }
+            .background(Color(UIColor.systemGroupedBackground))
+            .scrollDismissesKeyboard(.immediately)
+        }
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+        .onAppear {
+            recentUIDs = UserDefaults.standard.stringArray(forKey: recentsKey) ?? []
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                searchFocused = true
+            }
+        }
+    }
+
+    private func selectFriend(_ friend: Friend) {
+        var recents = recentUIDs.filter { $0 != friend.uid }
+        recents.insert(friend.uid, at: 0)
+        recentUIDs = Array(recents.prefix(10))
+        UserDefaults.standard.set(recentUIDs, forKey: recentsKey)
+        onSelectFriend(friend)
+        dismiss()
+    }
+}
+
+// MARK: - Recent Friend Card
+
+struct RecentFriendCard: View {
+    let friend: Friend
+    @State private var profileImage: UIImage? = nil
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(avatarColor(for: friend.name))
+                    .frame(width: 64, height: 64)
+                if let img = profileImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 64, height: 64)
+                        .clipShape(Circle())
+                } else {
+                    Text(String(friend.name.prefix(1)).uppercased())
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            Text(friend.name)
+                .font(.caption)
+                .fontWeight(.medium)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .frame(width: 76)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 10)
+        .background(Color(UIColor.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+        .task(id: friend.uid) {
+            profileImage = await AvatarCache.shared.fetch(uid: friend.uid)
         }
     }
 }
