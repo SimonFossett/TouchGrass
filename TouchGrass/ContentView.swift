@@ -572,13 +572,20 @@ struct HomeView: View {
                             .padding(.top, 60)
                         } else {
                             ForEach(sortedFriends) { friend in
-                                FriendRow(friend: friend)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        selectedFriend = friend
-                                    }
+                                let storyEntry = storyService.userStories.first { $0.uid == friend.uid }
+                                FriendRow(
+                                    friend: friend,
+                                    storyData: storyEntry,
+                                    onTapAvatar: storyEntry != nil ? {
+                                        if let idx = storyService.userStories.firstIndex(where: { $0.uid == friend.uid }) {
+                                            activeStoryUserIndex = idx
+                                        }
+                                    } : nil
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture { selectedFriend = friend }
                                 Divider()
-                                    .padding(.leading, 74)
+                                    .padding(.leading, 86)
                             }
                         }
                     }
@@ -735,9 +742,11 @@ struct FriendSearchView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var recentUIDs: [String] = []
+    @State private var activeStoryIndex: Int? = nil
     @FocusState private var searchFocused: Bool
 
     private let recentsKey = "recentFriendSearchUIDs"
+    private let storyService = StoryService.shared
 
     var recentFriends: [Friend] {
         recentUIDs.compactMap { uid in friends.first { $0.uid == uid } }
@@ -841,11 +850,20 @@ struct FriendSearchView: View {
                     } else {
                         VStack(spacing: 0) {
                             ForEach(filteredFriends) { friend in
-                                FriendRow(friend: friend)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { selectFriend(friend) }
+                                let storyEntry = storyService.userStories.first { $0.uid == friend.uid }
+                                FriendRow(
+                                    friend: friend,
+                                    storyData: storyEntry,
+                                    onTapAvatar: storyEntry != nil ? {
+                                        if let idx = storyService.userStories.firstIndex(where: { $0.uid == friend.uid }) {
+                                            activeStoryIndex = idx
+                                        }
+                                    } : nil
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture { selectFriend(friend) }
                                 if friend.uid != filteredFriends.last?.uid {
-                                    Divider().padding(.leading, 74)
+                                    Divider().padding(.leading, 86)
                                 }
                             }
                         }
@@ -860,6 +878,22 @@ struct FriendSearchView: View {
             .scrollDismissesKeyboard(.immediately)
         }
         .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+        .overlay {
+            if let idx = activeStoryIndex,
+               !storyService.userStories.isEmpty,
+               idx < storyService.userStories.count {
+                StoryViewerView(
+                    allUserStories: storyService.userStories,
+                    currentUserIndex: Binding(
+                        get: { idx },
+                        set: { activeStoryIndex = $0 }
+                    ),
+                    onDismiss: { activeStoryIndex = nil },
+                    onMarkSeen: { storyService.markSeen(storyID: $0) }
+                )
+                .ignoresSafeArea()
+            }
+        }
         .onAppear {
             recentUIDs = UserDefaults.standard.stringArray(forKey: recentsKey) ?? []
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -1096,26 +1130,21 @@ struct FriendRequestRow: View {
 // MARK: - Friend Row
 struct FriendRow: View {
     let friend: Friend
+    var storyData: UserStories? = nil
+    var onTapAvatar: (() -> Void)? = nil
     @State private var profileImage: UIImage? = nil
 
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(avatarColor(for: friend.name))
-                    .frame(width: 64, height: 64)
-                if let img = profileImage {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 64, height: 64)
-                        .clipShape(Circle())
+            // Avatar — separate tap target when a story is available
+            Group {
+                if let tap = onTapAvatar {
+                    avatarStack.onTapGesture { tap() }
                 } else {
-                    Text(String(friend.name.prefix(1)).uppercased())
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(.white)
+                    avatarStack
                 }
             }
+            .frame(width: 72, height: 72)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -1136,10 +1165,41 @@ struct FriendRow: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 10)
         .background(Color(UIColor.systemBackground))
         .task(id: friend.uid) {
             profileImage = await AvatarCache.shared.fetch(uid: friend.uid)
+        }
+    }
+
+    // Avatar circle with optional story ring
+    private var avatarStack: some View {
+        ZStack {
+            // Story ring: green = unseen, grey = already seen
+            if let story = storyData {
+                Circle()
+                    .stroke(
+                        story.hasUnseenStory ? Color.green : Color(UIColor.systemGray3),
+                        lineWidth: 3
+                    )
+                    .frame(width: 72, height: 72)
+            }
+
+            Circle()
+                .fill(avatarColor(for: friend.name))
+                .frame(width: 62, height: 62)
+
+            if let img = profileImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 62, height: 62)
+                    .clipShape(Circle())
+            } else {
+                Text(String(friend.name.prefix(1)).uppercased())
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(.white)
+            }
         }
     }
 
