@@ -36,9 +36,12 @@ class StepCounterManager {
         let startOfDay = Calendar.current.startOfDay(for: Date())
         dailyPedometer.startUpdates(from: startOfDay) { [weak self] data, _ in
             guard let steps = data?.numberOfSteps.intValue else { return }
-            DispatchQueue.main.async { self?.dailySteps = steps }
-            // Keep Firestore in sync so friends see today's steps on the leaderboard
-            Task { await UserService.shared.updateDailySteps(steps) }
+            // Take the higher of CMPedometer and any HealthKit sync persisted
+            // today. Without this, a CMPedometer update would overwrite a
+            // HealthKit value that was set after the user tapped Sync.
+            let effective = max(steps, HealthKitManager.todaysPersistedSteps)
+            DispatchQueue.main.async { self?.dailySteps = effective }
+            Task { await UserService.shared.updateDailySteps(effective) }
         }
     }
 

@@ -1653,6 +1653,7 @@ struct DailyStepsChartView: View {
 
     @State private var chartPoints: [StepChartPoint] = []
     @State private var isLoading = true
+    private let stepManager = StepCounterManager.shared
 
     // Pick the two comparison users based on the current user's rank.
     // Rank 1 → compare 2nd & 3rd. Rank 2 → compare 1st & 3rd.
@@ -1727,6 +1728,7 @@ struct DailyStepsChartView: View {
         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
         .task { await buildChartData() }
         .onChange(of: entries.count) { _, _ in Task { await buildChartData() } }
+        .onChange(of: stepManager.dailySteps) { _, _ in Task { await buildChartData() } }
     }
 
     private func buildChartData() async {
@@ -1885,7 +1887,6 @@ struct AppleHealthCard: View {
                     Spacer()
                     Button {
                         hkManager.fetchSteps()
-                        hkManager.syncToLeaderboard()
                     } label: {
                         Text("Sync")
                             .font(.subheadline)

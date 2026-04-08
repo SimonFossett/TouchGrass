@@ -23,13 +23,28 @@ class HealthKitManager {
     var isFetching = false
 
     private let healthStore = HKHealthStore()
-    private static let accessKey = "healthkit_access_requested"
+    private static let accessKey            = "healthkit_access_requested"
+    // Persisted so the HealthKit step count survives app restarts.
+    private static let persistedStepsKey    = "hk_daily_steps"
+    private static let persistedStepsDate   = "hk_daily_steps_date"
 
     private init() {
         hasRequestedAccess = UserDefaults.standard.bool(forKey: Self.accessKey)
-        if hasRequestedAccess {
-            fetchSteps()
-        }
+        // Restore today's previously-synced HealthKit value immediately so the
+        // metric card has data before the async fetch completes.
+        let restored = Self.todaysPersistedSteps
+        if restored > 0 { dailySteps = restored }
+        if hasRequestedAccess { fetchSteps() }
+    }
+
+    // MARK: - Persisted step count (shared with StepCounterManager)
+
+    /// Returns the HealthKit step count that was saved during the last sync
+    /// today, or 0 if no sync has happened today.
+    static var todaysPersistedSteps: Int {
+        guard let saved = UserDefaults.standard.object(forKey: persistedStepsDate) as? Date,
+              Calendar.current.isDateInToday(saved) else { return 0 }
+        return UserDefaults.standard.integer(forKey: persistedStepsKey)
     }
 
     // MARK: - Authorization
@@ -53,12 +68,10 @@ class HealthKitManager {
     func fetchSteps() {
         guard isAvailable else { return }
         isFetching = true
-        let stepType = HKQuantityType(.stepCount)
+        let stepType  = HKQuantityType(.stepCount)
         let startOfDay = Calendar.current.startOfDay(for: Date())
-        let predicate = HKQuery.predicateForSamples(
-            withStart: startOfDay,
-            end: Date(),
-            options: .strictStartDate
+        let predicate  = HKQuery.predicateForSamples(
+            withStart: startOfDay, end: Date(), options: .strictStartDate
         )
         let query = HKStatisticsQuery(
             quantityType: stepType,
@@ -67,8 +80,16 @@ class HealthKitManager {
         ) { [weak self] _, result, _ in
             let steps = Int(result?.sumQuantity()?.doubleValue(for: .count()) ?? 0)
             DispatchQueue.main.async {
-                self?.dailySteps = steps
-                self?.isFetching = false
+                guard let self else { return }
+                self.dailySteps = steps
+                self.isFetching = false
+                guard steps > 0 else { return }
+                // Persist so the value survives the next app launch.
+                UserDefaults.standard.set(steps, forKey: Self.persistedStepsKey)
+                UserDefaults.standard.set(startOfDay, forKey: Self.persistedStepsDate)
+                // Sync is called here — after the fetch completes — fixing the
+                // race condition that existed when both were called back-to-back.
+                self.syncToLeaderboard()
             }
         }
         healthStore.execute(query)
@@ -80,8 +101,8 @@ class HealthKitManager {
     /// step counter, and pushes the value to Firebase so it shows on the leaderboard.
     func syncToLeaderboard() {
         guard isAvailable, dailySteps > 0 else { return }
-        let effectiveSteps = max(dailySteps, StepCounterManager.shared.dailySteps)
-        StepCounterManager.shared.dailySteps = effectiveSteps
-        Task { await UserService.shared.updateDailySteps(effectiveSteps) }
+        let effective = max(dailySteps, StepCounterManager.shared.dailySteps)
+        StepCounterManager.shared.dailySteps = effective
+        Task { await UserService.shared.updateDailySteps(effective) }
     }
 }
