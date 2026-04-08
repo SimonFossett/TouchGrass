@@ -504,7 +504,7 @@ struct HomeView: View {
                         .fill(.ultraThinMaterial)
                         .frame(width: 58, height: 58)
                         .overlay(
-                            Image(systemName: "envelope.fill")
+                            Image(systemName: "person.2.badge.plus")
                                 .font(.system(size: 20, weight: .medium))
                                 .foregroundColor(.primary)
                         )
