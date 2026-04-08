@@ -25,12 +25,47 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - Tab Bar Compact Environment Key
+// Scrollable screens set this to true when the user scrolls down so the
+// tab bar can shrink, and back to false when they scroll to the top.
+
+private struct TabBarCompactKey: EnvironmentKey {
+    static let defaultValue: Binding<Bool> = .constant(false)
+}
+extension EnvironmentValues {
+    fileprivate var tabBarCompact: Binding<Bool> {
+        get { self[TabBarCompactKey.self] }
+        set { self[TabBarCompactKey.self] = newValue }
+    }
+}
+
+// MARK: - Scroll Offset Preference Key
+// A zero-height Color.clear placed at the top of a scroll view's content
+// reports its minY in the scroll view's coordinate space. Negative values
+// mean the user has scrolled down.
+
+private struct ScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+// MARK: - Tab Frame Preference Key
+// Each tab button reports its CGRect in the "tabBar" coordinate space so
+// the indicator pill can be positioned and drag-snapped correctly.
+
+private struct TabFrameKey: PreferenceKey {
+    static var defaultValue: [Tab: CGRect] = [:]
+    static func reduce(value: inout [Tab: CGRect], nextValue: () -> [Tab: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
 // MARK: - Main Content View
 struct ContentView: View {
     @State private var selectedTab: Tab = .home
     @State private var mapViewModel = MapViewModel()
     @State private var hideTabBar = false
-    @Namespace private var tabPillNamespace
+    @State private var isTabBarCompact = false
     private let firebase = FirebaseManager.shared
 
     var body: some View {
@@ -61,28 +96,19 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea(edges: .bottom)
             .environment(\.hideTabBar, $hideTabBar)
+            .environment(\.tabBarCompact, $isTabBarCompact)
 
             // Tab bar floats over content — hidden during story camera/viewer
             if !hideTabBar {
-                HStack {
-                    TabBarButton(tab: .home, selectedTab: $selectedTab, systemIconName: "house", namespace: tabPillNamespace)
-                    Spacer()
-                    TabBarButton(tab: .search, selectedTab: $selectedTab, systemIconName: "magnifyingglass", namespace: tabPillNamespace)
-                    Spacer()
-                    TabBarButton(tab: .map, selectedTab: $selectedTab, systemIconName: "map", namespace: tabPillNamespace)
-                    Spacer()
-                    TabBarButton(tab: .leaderboard, selectedTab: $selectedTab, systemIconName: "trophy", namespace: tabPillNamespace)
-                    Spacer()
-                    TabBarButton(tab: .profile, selectedTab: $selectedTab, systemIconName: "person", namespace: tabPillNamespace)
-                }
-                .padding(.horizontal, 36)
-                .padding(.vertical, 14)
-                .frame(maxWidth: .infinity)
-                .background(GlassBackground(cornerRadius: 22, showReflection: selectedTab == .map))
-                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                CustomTabBarView(selectedTab: $selectedTab, isCompact: $isTabBarCompact)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        // Reset compact state whenever the user switches tabs so a non-scrollable
+        // screen (e.g. Map) never gets stuck with a shrunken bar.
+        .onChange(of: selectedTab) { _, _ in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                isTabBarCompact = false
             }
         }
         .task { checkMotionPermission() }
@@ -118,33 +144,125 @@ enum Tab {
     case home, search, map, leaderboard, profile
 }
 
-// MARK: - Tab Bar Button
-struct TabBarButton: View {
-    let tab: Tab
+// MARK: - Custom Tab Bar
+// Hosts the glass pill container, the five tab icons, and the draggable
+// indicator pill. The indicator tracks each button's frame via a
+// PreferenceKey so it can be positioned precisely without matchedGeometry.
+
+struct CustomTabBarView: View {
     @Binding var selectedTab: Tab
-    let systemIconName: String
-    let namespace: Namespace.ID
+    @Binding var isCompact: Bool
+
+    @State private var tabFrames: [Tab: CGRect] = [:]
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDragging = false
+
+    private let orderedTabs: [(Tab, String)] = [
+        (.home,        "house"),
+        (.search,      "magnifyingglass"),
+        (.map,         "map"),
+        (.leaderboard, "trophy"),
+        (.profile,     "person")
+    ]
 
     var body: some View {
-        Button(action: {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                selectedTab = tab
+        let iconSize: CGFloat = isCompact ? 20 : 24
+        let vertPad:  CGFloat = isCompact ? 7  : 14
+
+        ZStack(alignment: .leading) {
+
+            // ── Indicator pill (sits behind the icons) ──────────────────
+            if let frame = tabFrames[selectedTab] {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(.white.opacity(0.3))
+                    .frame(width: frame.width, height: frame.height)
+                    // clamp so the pill never slides outside the bar
+                    .offset(x: clampedPillX(frame: frame))
             }
-        }) {
-            Image(systemName: systemIconName)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 24, height: 24)
-                .foregroundColor(selectedTab == tab ? .blue : .gray)
-                .padding(12)
-                .background {
-                    if selectedTab == tab {
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(.white.opacity(0.3))
-                            .matchedGeometryEffect(id: "tabPill", in: namespace)
+
+            // ── Icon row ────────────────────────────────────────────────
+            HStack(spacing: 0) {
+                ForEach(orderedTabs, id: \.0) { tab, icon in
+                    Image(systemName: icon)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: iconSize, height: iconSize)
+                        .foregroundColor(selectedTab == tab ? .blue : .gray)
+                        .padding(12)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                selectedTab = tab
+                                dragOffset = 0
+                            }
+                        }
+                        // Each button reports its frame in the "tabBar" space.
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: TabFrameKey.self,
+                                    value: [tab: proxy.frame(in: .named("tabBar"))]
+                                )
+                            }
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .coordinateSpace(name: "tabBar")
+        .onPreferenceChange(TabFrameKey.self) { tabFrames = $0 }
+        .padding(.horizontal, 36)
+        .padding(.vertical, vertPad)
+        .background(GlassBackground(cornerRadius: isCompact ? 18 : 22,
+                                     showReflection: selectedTab == .map))
+        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
+        .scaleEffect(isCompact ? 0.88 : 1.0, anchor: .bottom)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isCompact)
+        // Drag gesture — simultaneousGesture lets individual onTapGestures
+        // still fire for short touches (< minimumDistance movement).
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 6, coordinateSpace: .named("tabBar"))
+                .onChanged { value in
+                    isDragging = true
+                    dragOffset = value.translation.width
+
+                    // Live-switch to the nearest tab as the finger crosses midpoints.
+                    guard let nearest = nearestTab(to: value.location.x),
+                          nearest != selectedTab else { return }
+                    // Compensate dragOffset so the pill doesn't jump when the
+                    // base frame shifts to the new tab's position.
+                    let oldMinX = tabFrames[selectedTab]?.minX ?? 0
+                    let newMinX = tabFrames[nearest]?.minX ?? 0
+                    dragOffset += oldMinX - newMinX
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.9)) {
+                        selectedTab = nearest
                     }
                 }
-        }
+                .onEnded { value in
+                    let nearest = nearestTab(to: value.location.x) ?? selectedTab
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        selectedTab = nearest
+                        dragOffset = 0
+                    }
+                    isDragging = false
+                }
+        )
+    }
+
+    // Returns the nearest tab to a given x position in the "tabBar" space.
+    private func nearestTab(to x: CGFloat) -> Tab? {
+        tabFrames.min { abs($0.value.midX - x) < abs($1.value.midX - x) }?.key
+    }
+
+    // Clamps pill x so it never slides past the leftmost or rightmost button.
+    private func clampedPillX(frame: CGRect) -> CGFloat {
+        let raw = frame.minX + dragOffset
+        let minX = tabFrames.values.map(\.minX).min() ?? 0
+        let maxX = (tabFrames.values.map(\.maxX).max() ?? frame.width) - frame.width
+        return max(minX, min(raw, maxX))
     }
 }
 
@@ -328,7 +446,8 @@ struct HomeView: View {
     @State private var showStoryCamera = false
     @State private var isUploadingStory = false
     @State private var storyUploadError: String? = nil
-    @Environment(\.hideTabBar) private var hideTabBar
+    @Environment(\.hideTabBar)    private var hideTabBar
+    @Environment(\.tabBarCompact) private var tabBarCompact
 
     var filteredFriends: [Friend] {
         let pinned   = viewModel.friends.filter {  $0.isPinned }.sorted { $0.name.lowercased() < $1.name.lowercased() }
@@ -407,6 +526,19 @@ struct HomeView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
 
+                        // Scroll-offset probe: reports minY in the ScrollView's
+                        // coordinate space. Negative → user has scrolled down.
+                        Color.clear
+                            .frame(height: 0)
+                            .background(
+                                GeometryReader { proxy in
+                                    Color.clear.preference(
+                                        key: ScrollOffsetKey.self,
+                                        value: proxy.frame(in: .named("homeScroll")).minY
+                                    )
+                                }
+                            )
+
                         // MARK: Explore Stories
                         ExploreStoriesSection(
                             myStories: storyService.myStories,
@@ -462,6 +594,12 @@ struct HomeView: View {
                 }
                 .scrollDismissesKeyboard(.immediately)
                 .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
+                .coordinateSpace(name: "homeScroll")
+                .onPreferenceChange(ScrollOffsetKey.self) { offset in
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        tabBarCompact.wrappedValue = offset < -50
+                    }
+                }
             }
         }
         .dismissKeyboardOnTap()
@@ -1171,10 +1309,23 @@ struct ProfileView: View {
     @State private var errorMessage: String? = nil
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
+    @Environment(\.tabBarCompact) private var tabBarCompact
 
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
+
+                // Scroll-offset probe
+                Color.clear
+                    .frame(height: 0)
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: ScrollOffsetKey.self,
+                                value: proxy.frame(in: .named("profileScroll")).minY
+                            )
+                        }
+                    )
 
                 // MARK: Profile picture (centered, tappable)
                 Button {
@@ -1257,6 +1408,12 @@ struct ProfileView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
+        .coordinateSpace(name: "profileScroll")
+        .onPreferenceChange(ScrollOffsetKey.self) { offset in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                tabBarCompact.wrappedValue = offset < -50
+            }
+        }
         .task {
             do {
                 if let user = try await UserService.shared.fetchCurrentUser() {
@@ -1286,6 +1443,7 @@ struct LeaderboardView: View {
     @State private var isLoading = false
     @State private var loadFailed = false
     @State private var firstPlaceImage: UIImage? = nil
+    @Environment(\.tabBarCompact) private var tabBarCompact
 
     private var sorted: [LeaderboardEntry] {
         leaderboardEntries.sorted { $0.value(for: leaderboardType) > $1.value(for: leaderboardType) }
@@ -1305,6 +1463,18 @@ struct LeaderboardView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
+
+                    // Scroll-offset probe
+                    Color.clear
+                        .frame(height: 0)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: ScrollOffsetKey.self,
+                                    value: proxy.frame(in: .named("leaderboardScroll")).minY
+                                )
+                            }
+                        )
 
                     // MARK: Header row — title pill + picker pill
                     HStack(spacing: 12) {
@@ -1356,6 +1526,12 @@ struct LeaderboardView: View {
             }
         }
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
+        .coordinateSpace(name: "leaderboardScroll")
+        .onPreferenceChange(ScrollOffsetKey.self) { offset in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                tabBarCompact.wrappedValue = offset < -50
+            }
+        }
         .task(id: leaderboardType) {
             isLoading = true
             loadFailed = false
