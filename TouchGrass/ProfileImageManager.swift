@@ -14,6 +14,7 @@ class ProfileImageManager {
     static let shared = ProfileImageManager()
 
     var profileImage: UIImage?
+    private var authListener: AuthStateDidChangeListenerHandle?
 
     private init() {
         // Load the locally-cached copy immediately on first launch / fresh install.
@@ -22,7 +23,7 @@ class ProfileImageManager {
         // Re-download whenever a user signs in. This covers the sign-out → sign-in
         // flow: clearImage() wipes the local cache on sign-out, so the next sign-in
         // must trigger a fresh download from Firebase Storage.
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+        authListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             guard let self, user != nil else { return }
             self.loadImage()
         }

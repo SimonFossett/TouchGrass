@@ -918,6 +918,11 @@ struct RecentFriendCard: View {
             profileImage = await AvatarCache.shared.fetch(uid: friend.uid)
         }
     }
+
+    func avatarColor(for name: String) -> Color {
+        let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
+        return colors[abs(name.hashValue) % colors.count]
+    }
 }
 
 // MARK: - Friend Requests Inbox
