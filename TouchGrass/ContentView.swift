@@ -429,6 +429,8 @@ struct HomeView: View {
     @State private var selectedFriend: Friend? = nil
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
+    @State private var showSearchBar = false
+    @State private var showInbox = false
     private let profileManager = ProfileImageManager.shared
     private let storyService = StoryService.shared
     @State private var activeStoryUserIndex: Int? = nil
@@ -449,7 +451,7 @@ struct HomeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header: profile picture + search bar
+            // Header: profile pic · search circle · (spacer) · inbox circle
             HStack(spacing: 12) {
                 // Profile picture button
                 Button {
@@ -484,7 +486,55 @@ struct HomeView: View {
                     }
                 }
 
-                // Search bar
+                // Circular search button
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        showSearchBar.toggle()
+                        if !showSearchBar { searchText = "" }
+                    }
+                } label: {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 58, height: 58)
+                        .overlay(
+                            Image(systemName: showSearchBar ? "xmark" : "magnifyingglass")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(.primary)
+                        )
+                        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                }
+
+                Spacer()
+
+                // Inbox / friend-requests button
+                Button { showInbox = true } label: {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 58, height: 58)
+                        .overlay(
+                            Image(systemName: "envelope.fill")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(.primary)
+                        )
+                        .overlay(alignment: .topTrailing) {
+                            if !viewModel.pendingRequests.isEmpty {
+                                Text(viewModel.pendingRequests.count > 9 ? "9+" : "\(viewModel.pendingRequests.count)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(minWidth: 18, minHeight: 18)
+                                    .background(Color.red, in: Circle())
+                                    .offset(x: 4, y: -4)
+                            }
+                        }
+                        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(Color(UIColor.systemGray5))
+
+            // Collapsible search bar (shown when search button is active)
+            if showSearchBar {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.gray)
@@ -502,10 +552,11 @@ struct HomeView: View {
                 .padding(.vertical, 8)
                 .background(GlassBackground(cornerRadius: 10))
                 .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+                .background(Color(UIColor.systemGray5))
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color(UIColor.systemGray5))
 
             // Friends list
             if viewModel.isLoading {
@@ -537,20 +588,6 @@ struct HomeView: View {
                             onTapFriendStory: { idx in activeStoryUserIndex = idx },
                             onAddStory: { showStoryCamera = true }
                         )
-
-                        // MARK: Pending friend requests (always at top)
-                        if !viewModel.pendingRequests.isEmpty {
-                            SectionHeader(title: "Friend Requests")
-                            ForEach(viewModel.pendingRequests) { user in
-                                FriendRequestRow(user: user) {
-                                    viewModel.acceptRequest(from: user.id)
-                                } onDecline: {
-                                    viewModel.declineRequest(from: user.id)
-                                }
-                                Divider().padding(.leading, 74)
-                            }
-                            SectionHeader(title: "Friends")
-                        }
 
                         // MARK: Regular friends list
                         if viewModel.friends.isEmpty {
@@ -605,6 +642,9 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showEditProfile) {
             EditProfileView()
+        }
+        .fullScreenCover(isPresented: $showInbox) {
+            FriendRequestsInboxView(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: $showStoryCamera) {
             DualCameraView { compositeImage in
@@ -711,6 +751,85 @@ struct HomeView: View {
         .onChange(of: activeStoryUserIndex) { _, new in
             withAnimation(.easeInOut(duration: 0.2)) { hideTabBar.wrappedValue = new != nil }
         }
+    }
+}
+
+// MARK: - Friend Requests Inbox
+
+struct FriendRequestsInboxView: View {
+    var viewModel: HomeViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header with glass back button
+            HStack {
+                Button { dismiss() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Back")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(GlassBackground(cornerRadius: 20))
+                    .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                }
+
+                Spacer()
+
+                Text("Friend Requests")
+                    .font(.headline)
+
+                Spacer()
+
+                // Invisible mirror of back button to keep title centred
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.left")
+                    Text("Back")
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .opacity(0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(Color(UIColor.systemGray5))
+
+            if viewModel.pendingRequests.isEmpty {
+                Spacer()
+                VStack(spacing: 12) {
+                    Image(systemName: "envelope.open.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray.opacity(0.4))
+                    Text("No pending friend requests")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(24)
+                .background(GlassBackground(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+                .padding()
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(viewModel.pendingRequests) { user in
+                            FriendRequestRow(user: user) {
+                                viewModel.acceptRequest(from: user.id)
+                            } onDecline: {
+                                viewModel.declineRequest(from: user.id)
+                            }
+                            Divider().padding(.leading, 74)
+                        }
+                    }
+                }
+            }
+        }
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
     }
 }
 
