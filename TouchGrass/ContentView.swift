@@ -229,10 +229,12 @@ struct CustomTabBarView: View {
                     isDragging = true
                     dragOffset = value.translation.width
                 }
-                .onEnded { value in
-                    let nearest = nearestTab(to: value.location.x) ?? selectedTab
+                .onEnded { _ in
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        selectedTab = nearest
+                        if let frame = tabFrames[selectedTab] {
+                            let pillMidX = clampedPillX(frame: frame) + frame.width / 2
+                            selectedTab = nearestTab(to: pillMidX) ?? selectedTab
+                        }
                         dragOffset = 0
                     }
                     isDragging = false
