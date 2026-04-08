@@ -2100,6 +2100,7 @@ struct StoryViewerView: View {
     @State private var storyImage: UIImage? = nil
     @State private var isLoadingImage = true
     @GestureState private var dragY: CGFloat = 0
+    @GestureState private var isPaused: Bool = false
 
     private let storyDuration: TimeInterval = 5.0
 
@@ -2196,6 +2197,13 @@ struct StoryViewerView: View {
                     if value.translation.height > 120 { onDismiss() }
                 }
         )
+        // Hold anywhere to pause the progress bar; auto-resumes on release.
+        // simultaneousGesture lets this run alongside the dismiss drag and
+        // the left/right tap-zone gestures without blocking either.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .updating($isPaused) { _, state, _ in state = true }
+        )
         .task(id: "\(currentUserIndex)-\(currentStoryIndex)") {
             await loadAndRunStory()
         }
@@ -2233,11 +2241,17 @@ struct StoryViewerView: View {
         onMarkSeen(currentStory.id)
         isLoadingImage = false
 
-        // Animate progress bar over storyDuration
+        // Animate progress bar over storyDuration.
+        // Each step waits for any active hold to be released before counting.
         let steps = 200
         let stepInterval = storyDuration / Double(steps)
         for step in 1...steps {
             guard !Task.isCancelled else { return }
+            // Spin in 50 ms increments while the user is holding down.
+            while isPaused {
+                guard !Task.isCancelled else { return }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
             try? await Task.sleep(nanoseconds: UInt64(stepInterval * 1_000_000_000))
             guard !Task.isCancelled else { return }
             progress = CGFloat(step) / CGFloat(steps)
