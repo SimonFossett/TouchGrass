@@ -83,16 +83,29 @@ class UserService {
     }
 
     /// Pushes the user's daily step count to Firestore for leaderboard comparisons.
+    /// Also writes `dailyStepsDate` (yyyy-MM-dd in local time) so readers can
+    /// detect stale values from a previous day and treat them as zero.
     /// Writes are throttled to at most once every 30 seconds.
     func updateDailySteps(_ steps: Int) async {
         guard Date().timeIntervalSince(lastDailyStepsWrite) >= stepWriteInterval else { return }
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do {
-            try await db.collection("users").document(uid).updateData(["dailySteps": steps])
+            try await db.collection("users").document(uid).updateData([
+                "dailySteps":     steps,
+                "dailyStepsDate": Self.todayDateString()
+            ])
             lastDailyStepsWrite = Date()
         } catch {
             print("[UserService] updateDailySteps failed: \(error)")
         }
+    }
+
+    /// yyyy-MM-dd string in the device's local calendar — used to detect
+    /// whether a Firestore dailySteps value belongs to the current day.
+    static func todayDateString() -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        return fmt.string(from: Date())
     }
 
     /// Changes the current user's username if it isn't already taken.
