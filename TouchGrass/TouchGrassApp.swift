@@ -27,10 +27,26 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 @main
 struct TouchGrassApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @State private var showSplash = true
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ZStack {
+                ContentView()
+                if showSplash {
+                    SplashView()
+                        .transition(.opacity)
+                        .zIndex(1)
+                }
+            }
+            .task {
+                // Show for at least 2 seconds so Firebase auth state
+                // has time to resolve before the splash disappears.
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                withAnimation(.easeOut(duration: 0.5)) {
+                    showSplash = false
+                }
+            }
         }
     }
 }
