@@ -668,13 +668,14 @@ struct HomeView: View {
         } message: {
             Text(storyUploadError ?? "")
         }
-        // Start/refresh story listeners as soon as the friends list is ready
-        // and whenever it changes (friend added or removed).
+        // Start/refresh story and leaderboard listeners as soon as the friends
+        // list is ready and whenever it changes (friend added or removed).
         // Also pre-fetch avatar images so they're ready before the user scrolls.
         .onChange(of: viewModel.isLoading) { _, loading in
             if !loading {
                 let uids = viewModel.friends.map { $0.uid }
                 storyService.startListening(friendUIDs: uids)
+                LeaderboardService.shared.startListening(friendUIDs: uids)
                 AvatarCache.shared.prefetch(uids: uids)
             }
         }
@@ -682,6 +683,7 @@ struct HomeView: View {
             guard !viewModel.isLoading else { return }
             let uids = viewModel.friends.map { $0.uid }
             storyService.startListening(friendUIDs: uids)
+            LeaderboardService.shared.startListening(friendUIDs: uids)
             AvatarCache.shared.prefetch(uids: uids)
         }
         .overlay {
@@ -1681,10 +1683,10 @@ struct UserProfileSheet: View {
 }
 
 struct ProfileView: View {
-    private let profileManager = ProfileImageManager.shared
-    private let stepManager    = StepCounterManager.shared
+    private let profileManager    = ProfileImageManager.shared
+    private let stepManager       = StepCounterManager.shared
+    private let leaderboardService = LeaderboardService.shared
     @State private var username: String = ""
-    @State private var chartEntries: [LeaderboardEntry] = []
     @State private var errorMessage: String? = nil
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
@@ -1763,7 +1765,7 @@ struct ProfileView: View {
                 .padding(.horizontal, 24)
 
                 // MARK: Today's steps comparison chart
-                DailyStepsChartView(entries: chartEntries)
+                DailyStepsChartView(entries: leaderboardService.entries)
                     .padding(.horizontal, 24)
 
                 // MARK: Apple Health
@@ -1798,7 +1800,6 @@ struct ProfileView: View {
                 if let user = try await UserService.shared.fetchCurrentUser() {
                     username = user.username
                 }
-                chartEntries = try await LeaderboardService.shared.fetchEntries()
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -1818,14 +1819,30 @@ struct ProfileView: View {
 
 struct LeaderboardView: View {
     @State private var leaderboardType: LeaderboardType = .daily
-    @State private var leaderboardEntries: [LeaderboardEntry] = []
-    @State private var isLoading = false
-    @State private var loadFailed = false
     @State private var firstPlaceImage: UIImage? = nil
     @Environment(\.tabBarCompact) private var tabBarCompact
+    private let leaderboardService = LeaderboardService.shared
+    private let stepManager = StepCounterManager.shared
+
+    // Override the current user's entry with live CMPedometer values so their
+    // rank updates in real time even between Firestore write throttle windows.
+    private var liveEntries: [LeaderboardEntry] {
+        leaderboardService.entries.map { entry in
+            guard entry.isCurrentUser else { return entry }
+            return LeaderboardEntry(
+                id: entry.id,
+                username: entry.username,
+                dailySteps: stepManager.dailySteps,
+                totalStepScore: stepManager.totalStepScore,
+                dailyStreak: entry.dailyStreak,
+                overallStreak: entry.overallStreak,
+                isCurrentUser: true
+            )
+        }
+    }
 
     private var sorted: [LeaderboardEntry] {
-        leaderboardEntries.sorted { $0.value(for: leaderboardType) > $1.value(for: leaderboardType) }
+        liveEntries.sorted { $0.value(for: leaderboardType) > $1.value(for: leaderboardType) }
     }
 
     var body: some View {
@@ -1881,10 +1898,10 @@ struct LeaderboardView: View {
                     .padding(.top, 20)
 
                     // MARK: Rows
-                    if isLoading {
+                    if leaderboardService.isLoading {
                         ProgressView().padding(.vertical, 40)
-                    } else if leaderboardEntries.isEmpty {
-                        Text(loadFailed
+                    } else if liveEntries.isEmpty {
+                        Text(leaderboardService.loadFailed
                              ? "Couldn't load leaderboard — check your connection"
                              : "Add friends to see the leaderboard")
                             .font(.subheadline)
@@ -1912,18 +1929,9 @@ struct LeaderboardView: View {
             }
         }
         .task(id: leaderboardType) {
-            isLoading = true
-            loadFailed = false
-            do {
-                leaderboardEntries = try await LeaderboardService.shared.fetchEntries()
-            } catch {
-                loadFailed = true
-                leaderboardEntries = []
-            }
-            isLoading = false
             await loadFirstPlaceStory()
         }
-        .onChange(of: leaderboardType) {
+        .onChange(of: leaderboardService.entries) {
             Task { await loadFirstPlaceStory() }
         }
     }
