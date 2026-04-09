@@ -14,6 +14,7 @@ struct AuthView: View {
     @State private var isLoading = false
     @State private var showPasswordReset = false
     @State private var logoRotation: Double = 0
+    @State private var resolvedFontName: String = "Billabong"
     @FocusState private var focusedField: AuthField?
 
     private enum AuthField { case username, email, password }
@@ -54,8 +55,10 @@ struct AuthView: View {
                         }
                 }
                 Text("TouchGrass")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+                    .font(.custom(resolvedFontName, size: 400))
+                    .minimumScaleFactor(0.01)
+                    .lineLimit(1)
+                    .frame(width: 220)
             }
 
             Spacer()
@@ -147,6 +150,15 @@ struct AuthView: View {
             }
 
             Spacer()
+        }
+        .onAppear {
+            let candidates = ["Billabong", "Billabong-Regular", "BillabongRegular"]
+            for candidate in candidates {
+                if UIFont(name: candidate, size: 12) != nil {
+                    resolvedFontName = candidate
+                    break
+                }
+            }
         }
         .onChange(of: focusedField) { _, newField in
             if newField != nil { spin() }
