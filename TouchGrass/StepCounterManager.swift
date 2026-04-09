@@ -28,6 +28,7 @@ class StepCounterManager {
         }
         startDailyTracking()
         startTotalTracking()
+        scheduleMidnightReset()
     }
 
     // MARK: - Daily steps (live, resets at midnight)
@@ -42,6 +43,30 @@ class StepCounterManager {
             let effective = max(steps, HealthKitManager.todaysPersistedSteps)
             DispatchQueue.main.async { self?.dailySteps = effective }
             Task { await UserService.shared.updateDailySteps(effective) }
+        }
+    }
+
+    /// Schedules a one-shot timer that fires exactly at the next local midnight,
+    /// resets dailySteps to 0, restarts the pedometer from the new day's start,
+    /// and then schedules itself again for the following midnight.
+    private func scheduleMidnightReset() {
+        let calendar = Calendar.current
+        guard let nextMidnight = calendar.nextDate(
+            after: Date(),
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) else { return }
+
+        let delay = nextMidnight.timeIntervalSinceNow
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            self.dailyPedometer.stopUpdates()
+            self.dailySteps = 0
+            // Push the reset (0 steps) to Firestore immediately so other users
+            // see the correct value as soon as the new day starts.
+            Task { await UserService.shared.updateDailySteps(0) }
+            self.startDailyTracking()
+            self.scheduleMidnightReset()
         }
     }
 

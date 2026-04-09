@@ -54,6 +54,7 @@ class LeaderboardService {
         // Capture MainActor-isolated values before leaving the main actor
         let myDailySteps  = await MainActor.run { StepCounterManager.shared.dailySteps }
         let myTotalScore  = await MainActor.run { StepCounterManager.shared.totalStepScore }
+        let today         = UserService.todayDateString()
 
         // Fetch all user docs in parallel
         return await withTaskGroup(of: LeaderboardEntry?.self) { group in
@@ -64,9 +65,21 @@ class LeaderboardService {
                           let username = doc.data()?["username"] as? String else { return nil }
 
                     let isCurrentUser = uid == myUID
-                    // Use live values from StepCounterManager for the current user
-                    let dailySteps   = isCurrentUser ? myDailySteps  : (doc.data()?["dailySteps"] as? Int ?? 0)
-                    let totalScore   = isCurrentUser ? myTotalScore  : (doc.data()?["stepScore"]  as? Int ?? 0)
+
+                    // For the current user use live CMPedometer values so the
+                    // display is always up to the second.
+                    // For other users, only trust their Firestore dailySteps if
+                    // the accompanying date stamp is today — otherwise they
+                    // haven't pushed an update yet today and their count is 0.
+                    let dailySteps: Int
+                    if isCurrentUser {
+                        dailySteps = myDailySteps
+                    } else {
+                        let storedDate = doc.data()?["dailyStepsDate"] as? String ?? ""
+                        dailySteps = storedDate == today ? (doc.data()?["dailySteps"] as? Int ?? 0) : 0
+                    }
+
+                    let totalScore = isCurrentUser ? myTotalScore : (doc.data()?["stepScore"] as? Int ?? 0)
 
                     return LeaderboardEntry(
                         id: uid,
