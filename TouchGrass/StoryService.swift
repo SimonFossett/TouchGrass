@@ -54,6 +54,11 @@ class StoryService {
     /// The current user's own active stories.
     var myStories: [Story] = []
 
+    /// True while the current user has at least one story they haven't viewed yet.
+    var myStoriesHasUnseen: Bool {
+        myStories.contains { !seenIDs.contains($0.id) }
+    }
+
     private let db = Firestore.firestore()
     private var listeners: [ListenerRegistration] = []
     private var seenIDs: Set<String>
@@ -83,6 +88,8 @@ class StoryService {
         // Combining whereField equality + range on a different field requires a
         // Firestore composite index. Skipping it avoids that requirement and lets
         // us filter expired stories client-side in parseStories().
+
+        scheduleMidnightCleanup()
 
         // My own stories
         let myListener = db.collection("stories")
@@ -165,12 +172,20 @@ class StoryService {
         let now      = Date()
 
         do {
-            try await db.collection("stories").document(storyID).setData([
+            // Expire at the next local midnight so all stories reset together
+        // when daily steps reset, rather than rolling 24-hour windows.
+        let nextMidnight = Calendar.current.nextDate(
+            after: now,
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) ?? now.addingTimeInterval(24 * 60 * 60)
+
+        try await db.collection("stories").document(storyID).setData([
                 "uid":       uid,
                 "username":  username,
                 "imageURL":  downloadURL.absoluteString,
                 "createdAt": Timestamp(date: now),
-                "expiresAt": Timestamp(date: now.addingTimeInterval(24 * 60 * 60))
+                "expiresAt": Timestamp(date: nextMidnight)
             ])
             print("[Story] Firestore write succeeded (\(storyID))")
         } catch {
@@ -217,6 +232,46 @@ class StoryService {
               let image = UIImage(data: data) else { return nil }
         Self.imageCache[story.id] = image
         return image
+    }
+
+    // MARK: - Midnight Cleanup
+
+    /// Fires exactly at the next local midnight, removes expired stories from
+    /// local state, deletes the current user's expired Firestore docs, then
+    /// reschedules itself for the following midnight.
+    private func scheduleMidnightCleanup() {
+        guard let nextMidnight = Calendar.current.nextDate(
+            after: Date(),
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + nextMidnight.timeIntervalSinceNow) { [weak self] in
+            guard let self else { return }
+            let now = Date()
+            self.myStories.removeAll { $0.expiresAt <= now }
+            for i in self.userStories.indices {
+                self.userStories[i].stories.removeAll { $0.expiresAt <= now }
+            }
+            self.userStories.removeAll { $0.stories.isEmpty }
+            self.deleteExpiredOwnStories()
+            self.scheduleMidnightCleanup()
+        }
+    }
+
+    private func deleteExpiredOwnStories() {
+        guard let myUID = Auth.auth().currentUser?.uid else { return }
+        Task {
+            let snapshot = try? await db.collection("stories")
+                .whereField("uid", isEqualTo: myUID)
+                .getDocuments()
+            let now = Date()
+            for doc in snapshot?.documents ?? [] {
+                guard let ts = doc.data()["expiresAt"] as? Timestamp,
+                      ts.dateValue() <= now else { continue }
+                try? await db.collection("stories").document(doc.documentID).delete()
+            }
+        }
     }
 
     // MARK: - Private Helpers
