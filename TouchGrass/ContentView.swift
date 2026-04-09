@@ -550,6 +550,7 @@ struct HomeView: View {
                         // MARK: Explore Stories
                         ExploreStoriesSection(
                             myStories: storyService.myStories,
+                            myStoriesHasUnseen: storyService.myStoriesHasUnseen,
                             friendStories: storyService.userStories,
                             onTapMyStory: { showMyStoryViewer = true },
                             onTapFriendStory: { idx in activeStoryUserIndex = idx },
@@ -692,7 +693,7 @@ struct HomeView: View {
                     allUserStories: [myEntry],
                     currentUserIndex: .constant(0),
                     onDismiss: { showMyStoryViewer = false },
-                    onMarkSeen: { _ in }
+                    onMarkSeen: { storyService.markSeen(storyID: $0) }
                 )
                 .ignoresSafeArea()
             }
@@ -2465,6 +2466,7 @@ struct AppleHealthCard: View {
 
 struct ExploreStoriesSection: View {
     let myStories: [Story]
+    let myStoriesHasUnseen: Bool
     let friendStories: [UserStories]
     let onTapMyStory: () -> Void
     let onTapFriendStory: (Int) -> Void
@@ -2493,8 +2495,7 @@ struct ExploreStoriesSection: View {
                     MyStoryBubble(
                         profileImage: profileManager.profileImage,
                         hasStory: !myStories.isEmpty,
-                        // No active story → open camera. Active story → view it.
-                        // Long-press is intentionally absent: one story per 24 h.
+                        hasUnseenStory: myStoriesHasUnseen,
                         onTap: { myStories.isEmpty ? onAddStory() : onTapMyStory() }
                     )
 
@@ -2517,6 +2518,7 @@ struct ExploreStoriesSection: View {
 struct MyStoryBubble: View {
     let profileImage: UIImage?
     let hasStory: Bool
+    let hasUnseenStory: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -2524,15 +2526,19 @@ struct MyStoryBubble: View {
             VStack(spacing: 8) {
                 ZStack(alignment: .bottomTrailing) {
                     ZStack {
-                        // Green ring once a story is active
+                        // Green ring = active unseen story; grey = already viewed
                         if hasStory {
                             Circle()
                                 .stroke(
-                                    LinearGradient(
-                                        colors: [.green, .mint],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
+                                    hasUnseenStory
+                                        ? LinearGradient(
+                                            colors: [.green, .mint],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing)
+                                        : LinearGradient(
+                                            colors: [Color(UIColor.systemGray3), Color(UIColor.systemGray3)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing),
                                     lineWidth: 3
                                 )
                                 .frame(width: 92, height: 92)
