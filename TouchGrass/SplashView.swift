@@ -11,7 +11,7 @@ struct SplashView: View {
     @State private var resolvedFontName: String = "Billabong"
 
     private let logoSize: CGFloat = 108
-    private let textWidth: CGFloat = 134
+    private let textWidth: CGFloat = 240
 
     var body: some View {
         ZStack {
@@ -36,23 +36,9 @@ struct SplashView: View {
             .scaleEffect(scale)
             .opacity(opacity)
             .onAppear {
-                // Dump every registered font family + PostScript name so we
-                // can find the exact name for Billabong regardless of how the
-                // font file encodes it.
-                print("===== ALL REGISTERED FONTS =====")
-                for family in UIFont.familyNames.sorted() {
-                    for name in UIFont.fontNames(forFamilyName: family) {
-                        print("  family: \"\(family)\"  →  postScript: \"\(name)\"")
-                    }
-                }
-                print("===== END FONT LIST =====")
-
-                // Try common Billabong PostScript name variants and use the
-                // first one that actually loads.
                 let candidates = ["Billabong", "Billabong-Regular", "BillabongRegular"]
                 for candidate in candidates {
                     if UIFont(name: candidate, size: 12) != nil {
-                        print("✅ Billabong loaded as: \"\(candidate)\"")
                         resolvedFontName = candidate
                         break
                     }
