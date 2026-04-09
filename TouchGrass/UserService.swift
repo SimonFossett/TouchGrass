@@ -21,9 +21,9 @@ class UserService {
     static let shared = UserService()
     private let db = Firestore.firestore()
 
-    // Minimum interval between Firestore writes for step fields, to prevent
-    // automated spoofing via rapid successive calls.
-    private let stepWriteInterval: TimeInterval = 30
+    // Minimum interval between Firestore writes for step fields.
+    // 5 s gives friends near-real-time visibility without hammering Firestore.
+    private let stepWriteInterval: TimeInterval = 5
     private var lastStepScoreWrite: Date = .distantPast
     private var lastDailyStepsWrite: Date = .distantPast
 

@@ -7,6 +7,7 @@ import Foundation
 import CoreLocation
 import FirebaseAuth
 import FirebaseFirestore
+import Observation
 
 // MARK: - Leaderboard Type
 
@@ -38,67 +39,88 @@ struct LeaderboardEntry: Identifiable {
 
 // MARK: - Leaderboard Service
 
+@Observable
 class LeaderboardService {
     static let shared = LeaderboardService()
+
+    /// Live leaderboard entries — updated in real time by Firestore listeners.
+    var entries: [LeaderboardEntry] = []
+    var isLoading = true
+    var loadFailed = false
+
     private let db = Firestore.firestore()
+    private var listeners: [String: ListenerRegistration] = [:]
+    private var expectedCount = 0
+
     private init() {}
+    deinit { stopListening() }
 
-    // MARK: Leaderboard entries (current user + all accepted friends)
+    // MARK: - Start / Stop
 
-    func fetchEntries() async throws -> [LeaderboardEntry] {
-        guard let myUID = Auth.auth().currentUser?.uid else { return [] }
+    /// Opens one Firestore snapshot listener per user (self + each friend).
+    /// Any subsequent change to a user doc propagates immediately.
+    func startListening(friendUIDs: [String]) {
+        stopListening()
+        guard let myUID = Auth.auth().currentUser?.uid else {
+            isLoading = false
+            return
+        }
 
-        let friendUIDs = (try? await FriendService.shared.friendUIDs()) ?? []
         let allUIDs = [myUID] + friendUIDs
+        expectedCount = allUIDs.count
+        entries = []
+        isLoading = true
+        loadFailed = false
 
-        // Capture MainActor-isolated values before leaving the main actor
-        let myDailySteps  = await MainActor.run { StepCounterManager.shared.dailySteps }
-        let myTotalScore  = await MainActor.run { StepCounterManager.shared.totalStepScore }
-        let today         = UserService.todayDateString()
-
-        // Fetch all user docs in parallel
-        return await withTaskGroup(of: LeaderboardEntry?.self) { group in
-            for uid in allUIDs {
-                group.addTask { [weak self] in
-                    guard let self,
-                          let doc = try? await self.db.collection("users").document(uid).getDocument(),
-                          let username = doc.data()?["username"] as? String else { return nil }
-
-                    let isCurrentUser = uid == myUID
-
-                    // For the current user use live CMPedometer values so the
-                    // display is always up to the second.
-                    // For other users, only trust their Firestore dailySteps if
-                    // the accompanying date stamp is today — otherwise they
-                    // haven't pushed an update yet today and their count is 0.
-                    let dailySteps: Int
-                    if isCurrentUser {
-                        dailySteps = myDailySteps
-                    } else {
-                        let storedDate = doc.data()?["dailyStepsDate"] as? String ?? ""
-                        dailySteps = storedDate == today ? (doc.data()?["dailySteps"] as? Int ?? 0) : 0
+        for uid in allUIDs {
+            let isCurrentUser = uid == myUID
+            let listener = db.collection("users").document(uid)
+                .addSnapshotListener { [weak self] snapshot, error in
+                    guard let self else { return }
+                    if let error {
+                        print("[LeaderboardService] listener error for \(uid): \(error)")
+                        self.loadFailed = true
+                        self.isLoading = false
+                        return
                     }
+                    guard let data = snapshot?.data(),
+                          let username = data["username"] as? String else { return }
 
-                    let totalScore = isCurrentUser ? myTotalScore : (doc.data()?["stepScore"] as? Int ?? 0)
+                    let today = UserService.todayDateString()
+                    let storedDate = data["dailyStepsDate"] as? String ?? ""
+                    let dailySteps = storedDate == today ? (data["dailySteps"] as? Int ?? 0) : 0
 
-                    return LeaderboardEntry(
+                    let entry = LeaderboardEntry(
                         id: uid,
                         username: username,
                         dailySteps: dailySteps,
-                        totalStepScore: totalScore,
-                        dailyStreak: doc.data()?["dailyStreak"] as? Int ?? 0,
-                        overallStreak: doc.data()?["overallStreak"] as? Int ?? 0,
+                        totalStepScore: data["stepScore"] as? Int ?? 0,
+                        dailyStreak: data["dailyStreak"] as? Int ?? 0,
+                        overallStreak: data["overallStreak"] as? Int ?? 0,
                         isCurrentUser: isCurrentUser
                     )
+
+                    DispatchQueue.main.async {
+                        if let idx = self.entries.firstIndex(where: { $0.id == uid }) {
+                            self.entries[idx] = entry
+                        } else {
+                            self.entries.append(entry)
+                        }
+                        if self.isLoading && self.entries.count >= self.expectedCount {
+                            self.isLoading = false
+                        }
+                    }
                 }
-            }
-            var results: [LeaderboardEntry] = []
-            for await entry in group { if let e = entry { results.append(e) } }
-            return results
+            listeners[uid] = listener
         }
     }
 
-    // MARK: Friends for HomeView (Firestore-backed, with streak data)
+    func stopListening() {
+        listeners.values.forEach { $0.remove() }
+        listeners.removeAll()
+    }
+
+    // MARK: - Friends for HomeView
 
     /// Returns the current user's accepted friends as Friend objects, ready for
     /// the HomeView list. Respects local pin state stored in UserDefaults.
@@ -128,13 +150,5 @@ class LeaderboardService {
             for await friend in group { if let f = friend { results.append(f) } }
             return results.sorted { $0.name.lowercased() < $1.name.lowercased() }
         }
-    }
-
-    // MARK: Helpers
-
-    private func dateString(for date: Date) -> String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd"
-        return fmt.string(from: date)
     }
 }
