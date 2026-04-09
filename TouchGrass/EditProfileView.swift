@@ -182,10 +182,8 @@ struct CircularPhotoPicker: View {
     @State private var previewSize: CGFloat = 1
 
     // Pan & zoom state
-    @State private var scale:      CGFloat = 1.0
-    @State private var lastScale:  CGFloat = 1.0
-    @State private var offset:     CGSize  = .zero
-    @State private var lastOffset: CGSize  = .zero
+    @State private var scale:  CGFloat = 1.0
+    @State private var offset: CGSize  = .zero
 
     private let imageManager = PHCachingImageManager()
 
@@ -266,34 +264,22 @@ struct CircularPhotoPicker: View {
                     .scaleEffect(scale, anchor: .center)
                     .offset(offset)
                     .clipped()
-                    .gesture(
-                        SimultaneousGesture(
-                            MagnificationGesture()
-                                .onChanged { v in
-                                    scale = max(1.0, lastScale * v)
-                                }
-                                .onEnded { _ in
-                                    lastScale = scale
-                                    clampOffset(previewSize: previewSize)
-                                },
-                            DragGesture(minimumDistance: 4)
-                                .onChanged { v in
-                                    offset = CGSize(
-                                        width:  lastOffset.width  + v.translation.width,
-                                        height: lastOffset.height + v.translation.height
-                                    )
-                                }
-                                .onEnded { _ in
-                                    clampOffset(previewSize: previewSize)
-                                }
-                        )
-                    )
+                    .allowsHitTesting(false)
             }
 
             // Dim outside the circle
             CropOverlayView(cropSize: previewSize)
         }
         .frame(width: previewSize, height: previewSize)
+        .clipped()
+        // UIKit gesture recognizers are used here instead of SwiftUI gestures
+        // because UIKit recognizers are strictly bounded to their UIView's frame
+        // and cannot leak into sibling views (e.g. the nav bar buttons above).
+        .overlay(
+            GestureCapture(scale: $scale, offset: $offset) {
+                clampOffset(previewSize: previewSize)
+            }
+        )
     }
 
     // MARK: "Recents >" header
@@ -402,7 +388,6 @@ struct CircularPhotoPicker: View {
             height: min(max(offset.height, -maxPan), maxPan)
         )
         withAnimation(.interactiveSpring(response: 0.2)) { offset = clamped }
-        lastOffset = clamped
     }
 
     // MARK: - Crop math
@@ -541,6 +526,91 @@ struct CropOverlayView: View {
                 .frame(width: cropSize, height: cropSize)
         }
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - UIKit Gesture Capture
+// A transparent UIView overlay that handles pinch and pan via UIKit gesture
+// recognizers. UIKit recognizers are strictly bounded to their UIView frame
+// and cannot intercept touches that start outside it — unlike SwiftUI gestures
+// which can leak through contentShape in certain hierarchy configurations.
+
+private struct GestureCapture: UIViewRepresentable {
+    @Binding var scale:  CGFloat
+    @Binding var offset: CGSize
+    let onEnd: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+        view.isMultipleTouchEnabled = true
+
+        let pinch = UIPinchGestureRecognizer(target: context.coordinator,
+                                              action: #selector(Coordinator.handlePinch(_:)))
+        let pan   = UIPanGestureRecognizer(target: context.coordinator,
+                                            action: #selector(Coordinator.handlePan(_:)))
+        pan.maximumNumberOfTouches = 2
+        pinch.delegate = context.coordinator
+        pan.delegate   = context.coordinator
+
+        view.addGestureRecognizer(pinch)
+        view.addGestureRecognizer(pan)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // Capture bindings by value — Binding<T> holds a reference to the
+        // backing State storage, so the closures always read/write current values.
+        let scaleB  = _scale
+        let offsetB = _offset
+        let endCb   = onEnd
+        context.coordinator.getScale  = { scaleB.wrappedValue }
+        context.coordinator.getOffset = { offsetB.wrappedValue }
+        context.coordinator.setScale  = { scaleB.wrappedValue  = $0 }
+        context.coordinator.setOffset = { offsetB.wrappedValue = $0 }
+        context.coordinator.onEnd     = endCb
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var getScale:  () -> CGFloat       = { 1 }
+        var getOffset: () -> CGSize        = { .zero }
+        var setScale:  (CGFloat) -> Void   = { _ in }
+        var setOffset: (CGSize)  -> Void   = { _ in }
+        var onEnd:     () -> Void          = {}
+
+        private var startScale:  CGFloat = 1
+        private var startOffset: CGSize  = .zero
+
+        func gestureRecognizer(_ g: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+        @objc func handlePinch(_ g: UIPinchGestureRecognizer) {
+            switch g.state {
+            case .began:
+                startScale = getScale()
+            case .changed:
+                setScale(max(1.0, startScale * g.scale))
+            case .ended, .cancelled:
+                onEnd()
+            default: break
+            }
+        }
+
+        @objc func handlePan(_ g: UIPanGestureRecognizer) {
+            let t = g.translation(in: g.view)
+            switch g.state {
+            case .began:
+                startOffset = getOffset()
+            case .changed:
+                setOffset(CGSize(width:  startOffset.width  + t.x,
+                                 height: startOffset.height + t.y))
+            case .ended, .cancelled:
+                onEnd()
+            default: break
+            }
+        }
     }
 }
 
