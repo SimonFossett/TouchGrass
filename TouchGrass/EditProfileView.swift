@@ -178,6 +178,9 @@ struct CircularPhotoPicker: View {
     @State private var selectedID: String?      = nil
     @State private var isLoadingFull            = false
 
+    // Stable preview size — set once from GeometryReader, used by crop math
+    @State private var previewSize: CGFloat = 1
+
     // Pan & zoom state
     @State private var scale:      CGFloat = 1.0
     @State private var lastScale:  CGFloat = 1.0
@@ -188,41 +191,58 @@ struct CircularPhotoPicker: View {
 
     var body: some View {
         GeometryReader { geo in
-            let previewSize = max(geo.size.width, 1)   // guard against zero on first pass
-
             VStack(spacing: 0) {
-                navBar(previewSize: previewSize)
+
+                // MARK: Nav bar — inline so dismiss/onSave are never stale
+                HStack {
+                    Button("Cancel") { dismiss() }
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 9)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+
+                    Spacer()
+
+                    Text("Library")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+
+                    Spacer()
+
+                    Button("Done") {
+                        guard let img = selectedImage else { return }
+                        let cropped = cropImage(img, previewSize: previewSize)
+                        onSave(cropped)
+                        dismiss()
+                    }
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(selectedImage != nil ? .white : .white.opacity(0.35))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 9)
+                    .background(
+                        selectedImage != nil
+                            ? AnyShapeStyle(.ultraThinMaterial)
+                            : AnyShapeStyle(Color.white.opacity(0.08)),
+                        in: Capsule()
+                    )
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                    .disabled(selectedImage == nil)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(Color.black)
+
                 previewArea(previewSize: previewSize)
                 sectionHeader
                 photoGrid(geo: geo)
             }
             .background(Color.black.ignoresSafeArea())
-            .task { await requestAndLoad(previewSize: previewSize) }  // geo is in scope here
+            .onAppear { previewSize = max(geo.size.width, 1) }
+            .task { await requestAndLoad(previewSize: max(geo.size.width, 1)) }
         }
         .preferredColorScheme(.dark)
-    }
-
-    // MARK: Nav bar
-
-    private func navBar(previewSize: CGFloat) -> some View {
-        HStack {
-            Button("Cancel") { dismiss() }
-                .foregroundStyle(.blue)
-            Spacer()
-            Text("Library").font(.headline).foregroundStyle(.white)
-            Spacer()
-            Button("Done") {
-                guard let img = selectedImage else { return }
-                let cropped = cropImage(img, previewSize: previewSize)
-                onSave(cropped)
-                dismiss()
-            }
-            .foregroundStyle(selectedImage != nil ? .blue : Color(UIColor.systemGray3))
-            .disabled(selectedImage == nil)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(Color.black)
     }
 
     // MARK: Preview area (image + circle crop overlay)
@@ -251,7 +271,7 @@ struct CircularPhotoPicker: View {
                                     lastScale = scale
                                     clampOffset(previewSize: previewSize)
                                 },
-                            DragGesture()
+                            DragGesture(minimumDistance: 4)
                                 .onChanged { v in
                                     offset = CGSize(
                                         width:  lastOffset.width  + v.translation.width,
