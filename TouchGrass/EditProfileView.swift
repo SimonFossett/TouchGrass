@@ -82,7 +82,7 @@ struct EditProfileView: View {
         }
         // Split crop+library picker
         .fullScreenCover(isPresented: $showPhotoPicker) {
-            CircularPhotoPicker { cropped in
+            CircularPhotoPicker(isPresented: $showPhotoPicker) { cropped in
                 profileManager.saveImage(cropped)
             }
         }
@@ -167,8 +167,8 @@ struct EditProfileView: View {
 // scrollable photo library grid on the bottom.
 
 struct CircularPhotoPicker: View {
+    @Binding var isPresented: Bool
     let onSave: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.displayScale) private var displayScale
 
     @State private var assets: [PHAsset]  = []
@@ -195,7 +195,7 @@ struct CircularPhotoPicker: View {
 
                 // MARK: Nav bar — inline so dismiss/onSave are never stale
                 HStack {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { isPresented = false }
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)
@@ -215,7 +215,7 @@ struct CircularPhotoPicker: View {
                         guard let img = selectedImage else { return }
                         let cropped = cropImage(img, previewSize: previewSize)
                         onSave(cropped)
-                        dismiss()
+                        isPresented = false
                     }
                     .font(.body.weight(.semibold))
                     .foregroundStyle(selectedImage != nil ? .white : .white.opacity(0.35))
