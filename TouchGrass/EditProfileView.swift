@@ -169,6 +169,7 @@ struct EditProfileView: View {
 struct CircularPhotoPicker: View {
     let onSave: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
 
     @State private var assets: [PHAsset]  = []
     @State private var authStatus: PHAuthorizationStatus = .notDetermined
@@ -199,7 +200,7 @@ struct CircularPhotoPicker: View {
         }
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
-        .task { await requestAndLoad() }
+        .task { await requestAndLoad(previewSize: geo.size.width) }
     }
 
     // MARK: Nav bar
@@ -348,7 +349,7 @@ struct CircularPhotoPicker: View {
         scale      = 1.0; lastScale  = 1.0
         offset     = .zero; lastOffset = .zero
 
-        let px = previewSize * UIScreen.main.scale
+        let px = previewSize * displayScale
         let options = PHImageRequestOptions()
         options.deliveryMode        = .highQualityFormat
         options.isNetworkAccessAllowed = true
@@ -406,7 +407,7 @@ struct CircularPhotoPicker: View {
 
     // MARK: - Photo library
 
-    private func requestAndLoad() async {
+    private func requestAndLoad(previewSize: CGFloat) async {
         let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         authStatus = current == .notDetermined
             ? await PHPhotoLibrary.requestAuthorization(for: .readWrite)
@@ -424,7 +425,7 @@ struct CircularPhotoPicker: View {
         assets = fetched
 
         if let first = fetched.first {
-            selectAsset(first, previewSize: UIScreen.main.bounds.width)
+            selectAsset(first, previewSize: previewSize)
         }
     }
 }
@@ -439,6 +440,7 @@ private struct PhotoThumbnailCell: View {
     let onTap: () -> Void
 
     @State private var thumbnail: UIImage? = nil
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -469,7 +471,7 @@ private struct PhotoThumbnailCell: View {
     }
 
     private func loadThumb() async {
-        let px = size * UIScreen.main.scale
+        let px = size * displayScale
         let opts = PHImageRequestOptions()
         opts.deliveryMode           = .fastFormat
         opts.resizeMode             = .fast
