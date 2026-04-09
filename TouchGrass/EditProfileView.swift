@@ -4,7 +4,7 @@
 //
 
 import SwiftUI
-import PhotosUI
+import Photos
 
 // MARK: - Edit Profile View
 
@@ -12,12 +12,10 @@ struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     private let profileManager = ProfileImageManager.shared
 
-    @State private var selectedItem: PhotosPickerItem?
-    @State private var rawImage: UIImage?
-    @State private var showCrop = false
-    @State private var showPhotoError = false
+    @State private var showPhotoPicker    = false
+    @State private var showPhotoError     = false
     @State private var showChangeUsername = false
-    @State private var newUsernameInput = ""
+    @State private var newUsernameInput   = ""
     @State private var isChangingUsername = false
     @State private var usernameChangeError: String? = nil
 
@@ -43,8 +41,10 @@ struct EditProfileView: View {
                 }
                 .padding(.top, 20)
 
-                // Photo picker
-                PhotosPicker(selection: $selectedItem, matching: .images) {
+                // Open the split crop+library picker
+                Button {
+                    showPhotoPicker = true
+                } label: {
                     Text("Choose Photo")
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
@@ -54,24 +54,8 @@ struct EditProfileView: View {
                         .cornerRadius(12)
                 }
                 .padding(.horizontal, 30)
-                .onChange(of: selectedItem) { _, item in
-                    Task {
-                        guard let item else { return }
-                        do {
-                            guard let data = try await item.loadTransferable(type: Data.self),
-                                  let image = UIImage(data: data) else {
-                                showPhotoError = true
-                                return
-                            }
-                            rawImage = downsampledImage(image)
-                            showCrop = true
-                        } catch {
-                            showPhotoError = true
-                        }
-                    }
-                }
 
-                // Change username button
+                // Change username
                 Button {
                     newUsernameInput = ""
                     showChangeUsername = true
@@ -96,6 +80,13 @@ struct EditProfileView: View {
                 }
             }
         }
+        // Split crop+library picker
+        .fullScreenCover(isPresented: $showPhotoPicker) {
+            CircularPhotoPicker { cropped in
+                profileManager.saveImage(cropped)
+            }
+        }
+        // Change username sheet
         .sheet(isPresented: $showChangeUsername) {
             NavigationStack {
                 VStack(spacing: 24) {
@@ -130,8 +121,7 @@ struct EditProfileView: View {
                             if isChangingUsername {
                                 ProgressView().tint(.white)
                             } else {
-                                Text("Save Username")
-                                    .fontWeight(.semibold)
+                                Text("Save Username").fontWeight(.semibold)
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -169,200 +159,334 @@ struct EditProfileView: View {
         } message: {
             Text(usernameChangeError ?? "")
         }
-        .overlay {
-            if showCrop, let raw = rawImage {
-                ImageCropView(image: raw) { cropped in
-                    profileManager.saveImage(cropped)
-                    showCrop = false
-                } onCancel: {
-                    showCrop = false
-                }
-                .ignoresSafeArea()
-            }
-        }
     }
 }
 
-private func downsampledImage(_ image: UIImage, maxDimension: CGFloat = 1500) -> UIImage {
-    let longest = max(image.size.width, image.size.height)
-    guard longest > maxDimension else { return image }
-    let scale = maxDimension / longest
-    let newSize = CGSize(width: (image.size.width * scale).rounded(),
-                         height: (image.size.height * scale).rounded())
-    let format = UIGraphicsImageRendererFormat()
-    format.scale = 1
-    return UIGraphicsImageRenderer(size: newSize, format: format).image { _ in
-        image.draw(in: CGRect(origin: .zero, size: newSize))
-    }
-}
+// MARK: - Circular Photo Picker
+// Split-screen: image preview with circle crop mask on top,
+// scrollable photo library grid on the bottom.
 
-// MARK: - Image Crop View
-
-struct ImageCropView: View {
-    let image: UIImage
+struct CircularPhotoPicker: View {
     let onSave: (UIImage) -> Void
-    let onCancel: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
+    @State private var assets: [PHAsset]  = []
+    @State private var authStatus: PHAuthorizationStatus = .notDetermined
 
-    private let cropSize: CGFloat = 360
+    @State private var selectedImage: UIImage?  = nil
+    @State private var selectedID: String?      = nil
+    @State private var isLoadingFull            = false
+
+    // Pan & zoom state
+    @State private var scale:      CGFloat = 1.0
+    @State private var lastScale:  CGFloat = 1.0
+    @State private var offset:     CGSize  = .zero
+    @State private var lastOffset: CGSize  = .zero
+
+    private let imageManager = PHCachingImageManager()
 
     var body: some View {
         GeometryReader { geo in
-            ZStack {
-                Color.black.ignoresSafeArea()
+            let previewSize = geo.size.width   // square preview; circle = full width
 
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(
-                        SimultaneousGesture(
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    scale = max(1.0, lastScale * value)
-                                }
-                                .onEnded { _ in
-                                    lastScale = scale
-                                },
-                            DragGesture()
-                                .onChanged { value in
-                                    offset = CGSize(
-                                        width: lastOffset.width + value.translation.width,
-                                        height: lastOffset.height + value.translation.height
-                                    )
-                                }
-                                .onEnded { _ in
-                                    lastOffset = offset
-                                }
-                        )
-                    )
-                    .clipped()
-
-                CropOverlayView(cropSize: cropSize)
-
-                VStack {
-                    Spacer()
-
-                    // Zoom controls
-                    HStack(spacing: 0) {
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                scale = max(1.0, scale - 0.25)
-                                lastScale = scale
-                            }
-                        } label: {
-                            Image(systemName: "minus")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 56, height: 40)
-                        }
-
-                        Rectangle()
-                            .fill(Color.white.opacity(0.25))
-                            .frame(width: 1, height: 24)
-
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                scale = min(5.0, scale + 0.25)
-                                lastScale = scale
-                            }
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 56, height: 40)
-                        }
-                    }
-                    .background(
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(Color.white.opacity(0.15))
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.white.opacity(0.25), lineWidth: 1.5)
-                        }
-                    )
-                    .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-                    .padding(.bottom, 16)
-
-                    HStack(spacing: 20) {
-                        Button("Cancel") { onCancel() }
-                            .font(.body.weight(.semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 120, height: 48)
-                            .background(
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .fill(Color.white.opacity(0.15))
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .stroke(Color.white.opacity(0.25), lineWidth: 1.5)
-                                }
-                            )
-                            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-
-                        Button {
-                            let cropped = cropImage(containerSize: geo.size)
-                            onSave(cropped)
-                        } label: {
-                            Text("Save")
-                                .font(.body.weight(.semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 120, height: 48)
-                                .background(
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .fill(Color.green.opacity(0.7))
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .stroke(Color.white.opacity(0.25), lineWidth: 1.5)
-                                    }
-                                )
-                                .shadow(color: Color.green.opacity(0.4), radius: 8, y: 4)
-                        }
-                    }
-                    .padding(.bottom, 50)
-                }
+            VStack(spacing: 0) {
+                navBar(previewSize: previewSize)
+                previewArea(previewSize: previewSize)
+                sectionHeader
+                photoGrid(geo: geo)
             }
+            .background(Color.black)
         }
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
+        .task { await requestAndLoad() }
     }
 
-    private func cropImage(containerSize: CGSize) -> UIImage {
-        let outputSize = CGSize(width: cropSize, height: cropSize)
-        let renderer = UIGraphicsImageRenderer(size: outputSize)
+    // MARK: Nav bar
 
+    private func navBar(previewSize: CGFloat) -> some View {
+        HStack {
+            Button("Cancel") { dismiss() }
+                .foregroundStyle(.blue)
+            Spacer()
+            Text("Library").font(.headline).foregroundStyle(.white)
+            Spacer()
+            Button("Done") {
+                guard let img = selectedImage else { return }
+                let cropped = cropImage(img, previewSize: previewSize)
+                onSave(cropped)
+                dismiss()
+            }
+            .foregroundStyle(selectedImage != nil ? .blue : Color(UIColor.systemGray3))
+            .disabled(selectedImage == nil)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Color.black)
+    }
+
+    // MARK: Preview area (image + circle crop overlay)
+
+    private func previewArea(previewSize: CGFloat) -> some View {
+        ZStack {
+            Color.black
+
+            if isLoadingFull {
+                ProgressView().tint(.white)
+            } else if let img = selectedImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: previewSize, height: previewSize)
+                    .scaleEffect(scale, anchor: .center)
+                    .offset(offset)
+                    .clipped()
+                    .gesture(
+                        SimultaneousGesture(
+                            MagnificationGesture()
+                                .onChanged { v in
+                                    scale = max(1.0, lastScale * v)
+                                }
+                                .onEnded { _ in
+                                    lastScale = scale
+                                    clampOffset(previewSize: previewSize)
+                                },
+                            DragGesture()
+                                .onChanged { v in
+                                    offset = CGSize(
+                                        width:  lastOffset.width  + v.translation.width,
+                                        height: lastOffset.height + v.translation.height
+                                    )
+                                }
+                                .onEnded { _ in
+                                    clampOffset(previewSize: previewSize)
+                                }
+                        )
+                    )
+            }
+
+            // Dim outside the circle
+            CropOverlayView(cropSize: previewSize)
+        }
+        .frame(width: previewSize, height: previewSize)
+    }
+
+    // MARK: "Recents >" header
+
+    private var sectionHeader: some View {
+        HStack(spacing: 4) {
+            Text("Recents")
+                .font(.system(size: 16, weight: .bold))
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+            Spacer()
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.black)
+    }
+
+    // MARK: Photo grid
+
+    private func photoGrid(geo: GeometryProxy) -> some View {
+        let cols  = 4
+        let gap   = CGFloat(1)
+        let thumb = (geo.size.width - gap * CGFloat(cols - 1)) / CGFloat(cols)
+
+        return Group {
+            if authStatus == .denied || authStatus == .restricted {
+                VStack(spacing: 12) {
+                    Text("Photo library access is required.")
+                        .foregroundStyle(.white)
+                    Button("Open Settings") {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        UIApplication.shared.open(url)
+                    }
+                    .foregroundStyle(.blue)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+            } else {
+                ScrollView {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.fixed(thumb), spacing: gap), count: cols),
+                        spacing: gap
+                    ) {
+                        // Camera placeholder (first cell)
+                        ZStack {
+                            Color(UIColor.systemGray6)
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 26))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .frame(width: thumb, height: thumb)
+
+                        ForEach(assets, id: \.localIdentifier) { asset in
+                            PhotoThumbnailCell(
+                                asset: asset,
+                                size: thumb,
+                                isSelected: asset.localIdentifier == selectedID,
+                                imageManager: imageManager
+                            ) {
+                                selectAsset(asset, previewSize: geo.size.width)
+                            }
+                        }
+                    }
+                }
+                .background(Color.black)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func selectAsset(_ asset: PHAsset, previewSize: CGFloat) {
+        guard asset.localIdentifier != selectedID else { return }
+        selectedID     = asset.localIdentifier
+        isLoadingFull  = true
+        scale      = 1.0; lastScale  = 1.0
+        offset     = .zero; lastOffset = .zero
+
+        let px = previewSize * UIScreen.main.scale
+        let options = PHImageRequestOptions()
+        options.deliveryMode        = .highQualityFormat
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous       = false
+
+        imageManager.requestImage(
+            for: asset,
+            targetSize: CGSize(width: px * 1.5, height: px * 1.5),
+            contentMode: .aspectFit,
+            options: options
+        ) { image, info in
+            guard let image else { return }
+            let degraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
+            Task { @MainActor in
+                selectedImage = downsampledImage(image)
+                if !degraded { isLoadingFull = false }
+            }
+        }
+    }
+
+    /// Constrain pan so the circle (= previewSize diameter) is always fully covered.
+    private func clampOffset(previewSize: CGFloat) {
+        let maxPan = (previewSize * scale - previewSize) / 2
+        let clamped = CGSize(
+            width:  min(max(offset.width,  -maxPan), maxPan),
+            height: min(max(offset.height, -maxPan), maxPan)
+        )
+        withAnimation(.interactiveSpring(response: 0.2)) { offset = clamped }
+        lastOffset = clamped
+    }
+
+    // MARK: - Crop math
+
+    private func cropImage(_ image: UIImage, previewSize: CGFloat) -> UIImage {
+        let outputPt: CGFloat = 600          // output is 600 pt square
+        let ratio = outputPt / previewSize   // scale all coordinates to output space
+
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: outputPt, height: outputPt))
         return renderer.image { _ in
-            // Scale factor so the image fills the container
-            let fillScale = max(
-                containerSize.width / image.size.width,
-                containerSize.height / image.size.height
-            )
+            // Base fill scale: image fills the previewSize × previewSize square
+            let fillW = previewSize / image.size.width
+            let fillH = previewSize / image.size.height
+            let fill  = max(fillW, fillH)
 
-            // Image size after fill scale + user-applied scale
-            let displayedW = image.size.width * fillScale * scale
-            let displayedH = image.size.height * fillScale * scale
+            let dW = image.size.width  * fill * scale * ratio
+            let dH = image.size.height * fill * scale * ratio
 
-            // Image top-left in container coordinates (centered, then offset)
-            let imageX = (containerSize.width - displayedW) / 2 + offset.width
-            let imageY = (containerSize.height - displayedH) / 2 + offset.height
+            let dX = ((previewSize - image.size.width  * fill * scale) / 2 + offset.width)  * ratio
+            let dY = ((previewSize - image.size.height * fill * scale) / 2 + offset.height) * ratio
 
-            // Crop circle top-left in container coordinates
-            let cropX = (containerSize.width - cropSize) / 2
-            let cropY = (containerSize.height - cropSize) / 2
+            UIBezierPath(ovalIn: CGRect(origin: .zero, size: CGSize(width: outputPt, height: outputPt))).addClip()
+            image.draw(in: CGRect(x: dX, y: dY, width: dW, height: dH))
+        }
+    }
 
-            // Image position relative to the crop area
-            let drawX = imageX - cropX
-            let drawY = imageY - cropY
+    // MARK: - Photo library
 
-            let clipPath = UIBezierPath(ovalIn: CGRect(origin: .zero, size: outputSize))
-            clipPath.addClip()
+    private func requestAndLoad() async {
+        let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        authStatus = current == .notDetermined
+            ? await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+            : current
 
-            image.draw(in: CGRect(x: drawX, y: drawY, width: displayedW, height: displayedH))
+        guard authStatus == .authorized || authStatus == .limited else { return }
+
+        let opts = PHFetchOptions()
+        opts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        opts.fetchLimit = 200
+
+        var fetched: [PHAsset] = []
+        PHAsset.fetchAssets(with: .image, options: opts)
+            .enumerateObjects { asset, _, _ in fetched.append(asset) }
+        assets = fetched
+
+        if let first = fetched.first {
+            selectAsset(first, previewSize: UIScreen.main.bounds.width)
+        }
+    }
+}
+
+// MARK: - Photo Thumbnail Cell
+
+private struct PhotoThumbnailCell: View {
+    let asset: PHAsset
+    let size: CGFloat
+    let isSelected: Bool
+    let imageManager: PHCachingImageManager
+    let onTap: () -> Void
+
+    @State private var thumbnail: UIImage? = nil
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Group {
+                if let img = thumbnail {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Color(UIColor.systemGray5)
+                }
+            }
+            .frame(width: size, height: size)
+            .clipped()
+
+            if isSelected {
+                Color.black.opacity(0.25).frame(width: size, height: size)
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(radius: 2)
+                    .padding(4)
+            }
+        }
+        .frame(width: size, height: size)
+        .onTapGesture { onTap() }
+        .task(id: asset.localIdentifier) { await loadThumb() }
+    }
+
+    private func loadThumb() async {
+        let px = size * UIScreen.main.scale
+        let opts = PHImageRequestOptions()
+        opts.deliveryMode           = .fastFormat
+        opts.resizeMode             = .fast
+        opts.isNetworkAccessAllowed = true
+
+        thumbnail = await withCheckedContinuation { cont in
+            var resumed = false
+            imageManager.requestImage(
+                for: asset,
+                targetSize: CGSize(width: px, height: px),
+                contentMode: .aspectFill,
+                options: opts
+            ) { image, _ in
+                guard !resumed else { return }
+                resumed = true
+                cont.resume(returning: image)
+            }
         }
     }
 }
@@ -374,7 +498,7 @@ struct CropOverlayView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.55)
+            Color.black.opacity(0.45)
                 .ignoresSafeArea()
                 .mask(
                     ZStack {
@@ -387,9 +511,23 @@ struct CropOverlayView: View {
                 )
 
             Circle()
-                .strokeBorder(Color.white.opacity(0.8), lineWidth: 2)
+                .strokeBorder(Color.white.opacity(0.85), lineWidth: 2)
                 .frame(width: cropSize, height: cropSize)
         }
         .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Helpers
+
+private func downsampledImage(_ image: UIImage, maxDimension: CGFloat = 1500) -> UIImage {
+    let longest = max(image.size.width, image.size.height)
+    guard longest > maxDimension else { return image }
+    let scale = maxDimension / longest
+    let newSize = CGSize(width: (image.size.width  * scale).rounded(),
+                         height: (image.size.height * scale).rounded())
+    let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1
+    return UIGraphicsImageRenderer(size: newSize, format: fmt).image { _ in
+        image.draw(in: CGRect(origin: .zero, size: newSize))
     }
 }
