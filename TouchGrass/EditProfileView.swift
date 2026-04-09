@@ -356,8 +356,8 @@ struct CircularPhotoPicker: View {
         guard asset.localIdentifier != selectedID else { return }
         selectedID     = asset.localIdentifier
         isLoadingFull  = true
-        scale      = 1.0; lastScale  = 1.0
-        offset     = .zero; lastOffset = .zero
+        scale  = 1.0
+        offset = .zero
 
         let px = previewSize * displayScale
         let options = PHImageRequestOptions()
