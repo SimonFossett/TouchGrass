@@ -33,6 +33,8 @@
 	<string>This app uses motion data to track your steps.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>TouchGrass reads your step count from Apple Health to include Apple Watch steps in your daily total and leaderboard score.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TouchGrass accesses your photo library so you can choose a profile picture.</string>
 
 	<!-- Scene manifest (SwiftUI @main App — scene lifecycle managed by SwiftUI) -->
 	<key>UIApplicationSceneManifest</key>
