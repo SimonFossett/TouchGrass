@@ -188,7 +188,7 @@ struct CircularPhotoPicker: View {
 
     var body: some View {
         GeometryReader { geo in
-            let previewSize = geo.size.width   // square preview; circle = full width
+            let previewSize = max(geo.size.width, 1)   // guard against zero on first pass
 
             VStack(spacing: 0) {
                 navBar(previewSize: previewSize)
@@ -197,10 +197,10 @@ struct CircularPhotoPicker: View {
                 photoGrid(geo: geo)
             }
             .background(Color.black)
+            .task { await requestAndLoad(previewSize: previewSize) }  // geo is in scope here
         }
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
-        .task { await requestAndLoad(previewSize: geo.size.width) }
     }
 
     // MARK: Nav bar
