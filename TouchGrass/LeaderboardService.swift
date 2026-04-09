@@ -19,7 +19,7 @@ enum LeaderboardType: String, CaseIterable, Identifiable {
 
 // MARK: - Leaderboard Entry
 
-struct LeaderboardEntry: Identifiable {
+struct LeaderboardEntry: Identifiable, Equatable {
     let id: String          // Firebase UID
     let username: String
     let dailySteps: Int
