@@ -190,58 +190,63 @@ struct CircularPhotoPicker: View {
     private let imageManager = PHCachingImageManager()
 
     var body: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
+        // Nav bar lives OUTSIDE the GeometryReader so no child view
+        // (ScrollView, image gesture, etc.) can ever overlap or intercept it.
+        VStack(spacing: 0) {
 
-                // MARK: Nav bar — inline so dismiss/onSave are never stale
-                HStack {
-                    Button("Cancel") { isPresented = false }
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 9)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
-
-                    Spacer()
-
-                    Text("Library")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-
-                    Spacer()
-
-                    Button("Done") {
-                        guard let img = selectedImage else { return }
-                        let cropped = cropImage(img, previewSize: previewSize)
-                        onSave(cropped)
-                        isPresented = false
-                    }
+            // MARK: Nav bar
+            HStack {
+                Button("Cancel") { isPresented = false }
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(selectedImage != nil ? .white : .white.opacity(0.35))
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 9)
-                    .background(
-                        selectedImage != nil
-                            ? AnyShapeStyle(.ultraThinMaterial)
-                            : AnyShapeStyle(Color.white.opacity(0.08)),
-                        in: Capsule()
-                    )
+                    .background(.ultraThinMaterial, in: Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
-                    .disabled(selectedImage == nil)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-                .background(Color.black)
 
-                previewArea(previewSize: previewSize)
-                sectionHeader
-                photoGrid(geo: geo)
+                Spacer()
+
+                Text("Library")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                Button("Done") {
+                    guard let img = selectedImage else { return }
+                    let cropped = cropImage(img, previewSize: previewSize)
+                    onSave(cropped)
+                    isPresented = false
+                }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(selectedImage != nil ? .white : .white.opacity(0.35))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(
+                    selectedImage != nil
+                        ? AnyShapeStyle(.ultraThinMaterial)
+                        : AnyShapeStyle(Color.white.opacity(0.08)),
+                    in: Capsule()
+                )
+                .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                .disabled(selectedImage == nil)
             }
-            .background(Color.black.ignoresSafeArea())
-            .onAppear { previewSize = max(geo.size.width, 1) }
-            .task { await requestAndLoad(previewSize: max(geo.size.width, 1)) }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(Color.black)
+
+            // MARK: Content (GeometryReader used only for size)
+            GeometryReader { geo in
+                VStack(spacing: 0) {
+                    previewArea(previewSize: previewSize)
+                    sectionHeader
+                    photoGrid(geo: geo)
+                }
+                .onAppear { previewSize = max(geo.size.width, 1) }
+                .task { await requestAndLoad(previewSize: max(geo.size.width, 1)) }
+            }
         }
+        .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
     }
 
