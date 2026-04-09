@@ -196,10 +196,9 @@ struct CircularPhotoPicker: View {
                 sectionHeader
                 photoGrid(geo: geo)
             }
-            .background(Color.black)
+            .background(Color.black.ignoresSafeArea())
             .task { await requestAndLoad(previewSize: previewSize) }  // geo is in scope here
         }
-        .ignoresSafeArea()
         .preferredColorScheme(.dark)
     }
 
