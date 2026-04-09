@@ -44,9 +44,10 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
-	<!-- Custom fonts -->
+	<!-- Custom fonts (register both common download names) -->
 	<key>UIAppFonts</key>
 	<array>
+		<string>Billabong.ttf</string>
 		<string>Billabong-Regular.ttf</string>
 	</array>
 
