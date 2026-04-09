@@ -60,11 +60,16 @@ class StepCounterManager {
         let delay = nextMidnight.timeIntervalSinceNow
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let self else { return }
+            // Capture the final step count BEFORE resetting so streak logic
+            // can compare against friends who haven't reached midnight yet.
+            let finalSteps = self.dailySteps
             self.dailyPedometer.stopUpdates()
             self.dailySteps = 0
-            // Push the reset (0 steps) to Firestore immediately so other users
-            // see the correct value as soon as the new day starts.
-            Task { await UserService.shared.updateDailySteps(0) }
+            Task {
+                // Evaluate streak, archive yesterday's count, then reset to 0.
+                await UserService.shared.updateStreakAtMidnight(myFinalSteps: finalSteps)
+                await UserService.shared.resetDailySteps()
+            }
             self.startDailyTracking()
             self.scheduleMidnightReset()
         }

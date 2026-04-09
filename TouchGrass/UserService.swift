@@ -108,6 +108,78 @@ class UserService {
         return fmt.string(from: Date())
     }
 
+    static func yesterdayDateString() -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+        return fmt.string(from: yesterday)
+    }
+
+    /// Called at midnight with the user's FINAL step count for the day.
+    /// Archives that count, determines if the user won 1st place among their
+    /// friend group, and updates their dailyStreak accordingly.
+    func updateStreakAtMidnight(myFinalSteps: Int) async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+
+        let friendUIDs = (try? await FriendService.shared.friendUIDs()) ?? []
+        let today     = Self.todayDateString()
+        let yesterday = Self.yesterdayDateString()
+
+        // Archive this user's final step count so friends who fire midnight
+        // later can still read it even after this device resets to 0.
+        try? await db.collection("users").document(uid).updateData([
+            "previousDaySteps": myFinalSteps,
+            "previousDayDate":  yesterday
+        ])
+
+        // Determine the highest step count among friends for yesterday.
+        var maxFriendSteps = 0
+        for fUID in friendUIDs {
+            guard let doc = try? await db.collection("users").document(fUID).getDocument() else { continue }
+            let data = doc.data() ?? [:]
+            let storedDate = data["dailyStepsDate"] as? String ?? ""
+            let steps: Int
+            if storedDate == today {
+                // Friend already reset for today — use their archived previous-day count.
+                let prevDate = data["previousDayDate"] as? String ?? ""
+                steps = prevDate == yesterday ? (data["previousDaySteps"] as? Int ?? 0) : 0
+            } else {
+                // Friend hasn't reset yet — their current dailySteps IS yesterday's final count.
+                steps = data["dailySteps"] as? Int ?? 0
+            }
+            maxFriendSteps = max(maxFriendSteps, steps)
+        }
+
+        // Win = strictly most steps AND walked at least 1 step.
+        // On a tie nobody wins (both lose streak).
+        let won: Bool
+        if friendUIDs.isEmpty {
+            won = myFinalSteps > 0   // solo: reward any walking
+        } else {
+            won = myFinalSteps > 0 && myFinalSteps > maxFriendSteps
+        }
+
+        guard let myDoc = try? await db.collection("users").document(uid).getDocument() else { return }
+        let currentStreak = myDoc.data()?["dailyStreak"] as? Int ?? 0
+        let newStreak = won ? currentStreak + 1 : 0
+        try? await db.collection("users").document(uid).updateData(["dailyStreak": newStreak])
+    }
+
+    /// Resets the current user's daily steps to 0 in Firestore.
+    /// Bypasses the normal write throttle — intended for use only at midnight.
+    func resetDailySteps() async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        do {
+            try await db.collection("users").document(uid).updateData([
+                "dailySteps":     0,
+                "dailyStepsDate": Self.todayDateString()
+            ])
+            lastDailyStepsWrite = Date()
+        } catch {
+            print("[UserService] resetDailySteps failed: \(error)")
+        }
+    }
+
     /// Changes the current user's username if it isn't already taken.
     func changeUsername(to newUsername: String) async throws {
         guard let uid = Auth.auth().currentUser?.uid else {
