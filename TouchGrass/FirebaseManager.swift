@@ -51,6 +51,7 @@ class FirebaseManager {
         }
     }
 
+    @MainActor
     func signUp(email: String, password: String, username: String) async throws {
         // Validate format before touching the network
         guard username.wholeMatch(of: usernameRegex) != nil else {

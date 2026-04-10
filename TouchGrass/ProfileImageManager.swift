@@ -76,6 +76,7 @@ class ProfileImageManager {
         }
     }
 
+    @MainActor
     private func downloadFromStorage() async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         let ref = Storage.storage().reference().child("profile_images/\(uid).jpg")
