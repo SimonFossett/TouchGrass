@@ -23,9 +23,6 @@ class HealthKitManager {
     var isFetching = false
 
     private let healthStore = HKHealthStore()
-    // Not observed by any view — mark ignored so @Observable doesn't add
-    // thread-safety checks or tracking overhead for this internal handle.
-    @ObservationIgnored
     private var observerQuery: HKObserverQuery?
     private static let accessKey            = "healthkit_access_requested"
     // Persisted so the HealthKit step count survives app restarts.
@@ -91,11 +88,9 @@ class HealthKitManager {
 
         // Fires once immediately and then every time step data changes.
         // The completionHandler MUST be called to tell HealthKit we handled the update.
-        // HKObserverQuery fires on a background thread — dispatch to main before
-        // calling fetchSteps, which mutates @Observable properties (isFetching, dailySteps).
         let query = HKObserverQuery(sampleType: stepType, predicate: nil) { [weak self] _, completionHandler, error in
             guard error == nil else { completionHandler(); return }
-            DispatchQueue.main.async { self?.fetchSteps(backgroundCompletion: completionHandler) }
+            self?.fetchSteps(backgroundCompletion: completionHandler)
         }
         observerQuery = query
         healthStore.execute(query)
