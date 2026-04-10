@@ -266,10 +266,10 @@ class HomeViewModel {
     var errorMessage: String? = nil
 
     private let db = Firestore.firestore()
-    private var incomingDocs: [QueryDocumentSnapshot] = []
-    private var outgoingDocs: [QueryDocumentSnapshot] = []
-    private var requestListeners: [ListenerRegistration] = []
-    private var friendDocListeners: [String: ListenerRegistration] = [:]
+    @ObservationIgnored private var incomingDocs: [QueryDocumentSnapshot] = []
+    @ObservationIgnored private var outgoingDocs: [QueryDocumentSnapshot] = []
+    @ObservationIgnored private var requestListeners: [ListenerRegistration] = []
+    @ObservationIgnored private var friendDocListeners: [String: ListenerRegistration] = [:]
 
     init() { startRequestListeners() }
     deinit { stopAll() }
@@ -283,7 +283,10 @@ class HomeViewModel {
             .whereField("toUID", isEqualTo: myUID)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let self else { return }
-                if let error { self.errorMessage = error.localizedDescription; return }
+                if let error {
+                    DispatchQueue.main.async { self.errorMessage = error.localizedDescription }
+                    return
+                }
                 self.incomingDocs = snapshot?.documents ?? []
                 Task { await self.recomputeState() }
             }
@@ -292,7 +295,10 @@ class HomeViewModel {
             .whereField("fromUID", isEqualTo: myUID)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let self else { return }
-                if let error { self.errorMessage = error.localizedDescription; return }
+                if let error {
+                    DispatchQueue.main.async { self.errorMessage = error.localizedDescription }
+                    return
+                }
                 self.outgoingDocs = snapshot?.documents ?? []
                 Task { await self.recomputeState() }
             }
@@ -374,10 +380,12 @@ class HomeViewModel {
                     isPinned:  pinned.contains(uid),
                     streak:    data["dailyStreak"] as? Int ?? 0
                 )
-                if let idx = self.friends.firstIndex(where: { $0.uid == uid }) {
-                    self.friends[idx] = friend
-                } else {
-                    self.friends.append(friend)
+                DispatchQueue.main.async {
+                    if let idx = self.friends.firstIndex(where: { $0.uid == uid }) {
+                        self.friends[idx] = friend
+                    } else {
+                        self.friends.append(friend)
+                    }
                 }
             }
         friendDocListeners[uid] = listener
@@ -386,23 +394,23 @@ class HomeViewModel {
     // MARK: Actions
 
     func acceptRequest(from uid: String) {
-        Task {
+        Task { @MainActor [weak self] in
             do { try await FriendService.shared.acceptRequest(from: uid) }
-            catch { errorMessage = error.localizedDescription }
+            catch { self?.errorMessage = error.localizedDescription }
         }
     }
 
     func declineRequest(from uid: String) {
-        Task {
+        Task { @MainActor [weak self] in
             do { try await FriendService.shared.denyRequest(from: uid) }
-            catch { errorMessage = error.localizedDescription }
+            catch { self?.errorMessage = error.localizedDescription }
         }
     }
 
     func removeFriend(uid: String) {
-        Task {
+        Task { @MainActor [weak self] in
             do { try await FriendService.shared.removeFriend(uid) }
-            catch { errorMessage = error.localizedDescription }
+            catch { self?.errorMessage = error.localizedDescription }
         }
     }
 
