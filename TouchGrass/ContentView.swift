@@ -111,9 +111,22 @@ struct ContentView: View {
                 isTabBarCompact = false
             }
         }
-        .task { checkMotionPermission() }
+        .task {
+            checkMotionPermission()
+            // Stagger so the HealthKit sheet doesn't compete with the motion sheet.
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            if !showMotionSheet { checkHealthKitPermission() }
+        }
+        // When the motion sheet is dismissed, check HealthKit next.
+        .onChange(of: showMotionSheet) { _, isShowing in
+            if !isShowing { checkHealthKitPermission() }
+        }
         .sheet(isPresented: $showMotionSheet) {
             MotionPermissionSheet(isDenied: motionPermissionDenied)
+                .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showHealthKitSheet) {
+            HealthKitPermissionSheet()
                 .presentationDetents([.medium])
         }
     }
@@ -136,6 +149,16 @@ struct ContentView: View {
         default:
             break
         }
+    }
+
+    // MARK: - HealthKit Permission
+
+    @State private var showHealthKitSheet = false
+
+    private func checkHealthKitPermission() {
+        let hk = HealthKitManager.shared
+        guard hk.isAvailable, !hk.hasRequestedAccess else { return }
+        showHealthKitSheet = true
     }
 }
 
@@ -2385,6 +2408,50 @@ struct MotionPermissionSheet: View {
                     dismiss()
                 }
                 .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, 32)
+
+            Spacer()
+        }
+    }
+}
+
+// MARK: - HealthKit Permission Sheet
+
+struct HealthKitPermissionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    private let hkManager = HealthKitManager.shared
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 64))
+                .foregroundColor(.red)
+                .padding(.top, 40)
+
+            Text("Background Step Tracking")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("TouchGrass reads your step data from Apple Health to keep your leaderboard position accurate at all times — including steps from your Apple Watch — even when the app isn't open.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 32)
+
+            VStack(spacing: 12) {
+                Button("Allow Step Tracking") {
+                    hkManager.requestAuthorization()
+                    dismiss()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color.red)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+
+                Button("Not Now") { dismiss() }
+                    .foregroundColor(.secondary)
             }
             .padding(.horizontal, 32)
 
