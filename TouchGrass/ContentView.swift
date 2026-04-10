@@ -310,6 +310,7 @@ class HomeViewModel {
 
     // MARK: State derivation
 
+    @MainActor
     private func recomputeState() async {
         var pendingUIDs: [String] = []
         var currentFriendUIDs: [String] = []
@@ -1936,6 +1937,7 @@ struct LeaderboardView: View {
         }
     }
 
+    @MainActor
     private func loadFirstPlaceStory() async {
         guard let firstPlace = sorted.first else {
             firstPlaceImage = nil
@@ -2814,6 +2816,7 @@ struct StoryViewerView: View {
 
     // MARK: - Story Loading + Timer
 
+    @MainActor
     private func loadAndRunStory() async {
         isLoadingImage = true
         progress = 0
