@@ -2294,6 +2294,7 @@ struct DailyStepsChartView: View {
         .onChange(of: stepManager.dailySteps) { _, _ in Task { await buildChartData() } }
     }
 
+    @MainActor
     private func buildChartData() async {
         isLoading = true
         let hourlyMine = await StepCounterManager.shared.fetchHourlySteps()
