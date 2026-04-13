@@ -49,8 +49,8 @@ class LeaderboardService {
     var loadFailed = false
 
     private let db = Firestore.firestore()
-    private var listeners: [String: ListenerRegistration] = [:]
-    private var expectedCount = 0
+    @ObservationIgnored private var listeners: [String: ListenerRegistration] = [:]
+    @ObservationIgnored private var expectedCount = 0
 
     private init() {}
     deinit { stopListening() }
@@ -79,8 +79,10 @@ class LeaderboardService {
                     guard let self else { return }
                     if let error {
                         print("[LeaderboardService] listener error for \(uid): \(error)")
-                        self.loadFailed = true
-                        self.isLoading = false
+                        DispatchQueue.main.async {
+                            self.loadFailed = true
+                            self.isLoading = false
+                        }
                         return
                     }
                     guard let data = snapshot?.data(),

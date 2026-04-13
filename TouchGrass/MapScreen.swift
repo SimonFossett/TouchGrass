@@ -34,10 +34,10 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
 
     private let locationManager = CLLocationManager()
     private let db = Firestore.firestore()
-    private var friendListeners: [ListenerRegistration] = []
-    private var lastUploadedLocation: CLLocation?
-    private var lastLocationUpload: Date = .distantPast
-    private var hasSetInitialPosition = false
+    @ObservationIgnored private var friendListeners: [ListenerRegistration] = []
+    @ObservationIgnored private var lastUploadedLocation: CLLocation?
+    @ObservationIgnored private var lastLocationUpload: Date = .distantPast
+    @ObservationIgnored private var hasSetInitialPosition = false
 
     override init() {
         super.init()

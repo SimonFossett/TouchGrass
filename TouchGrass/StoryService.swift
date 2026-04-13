@@ -60,7 +60,7 @@ class StoryService {
     }
 
     private let db = Firestore.firestore()
-    private var listeners: [ListenerRegistration] = []
+    @ObservationIgnored private var listeners: [ListenerRegistration] = []
     private var seenIDs: Set<String>
 
     private init() {
