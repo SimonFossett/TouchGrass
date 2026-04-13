@@ -2250,6 +2250,14 @@ struct DailyStepsChartView: View {
         [.green] + [Color.blue, Color.orange].prefix(comparisonEntries.count)
     }
 
+    // chartPoints is updated asynchronously; seriesLabels updates synchronously when
+    // entries changes. Filter stale points whose labels are no longer in the domain
+    // to prevent a Charts assertion (brk #0x1) when the two are momentarily out of sync.
+    private var displayChartPoints: [StepChartPoint] {
+        let validLabels = Set(seriesLabels)
+        return chartPoints.filter { validLabels.contains($0.label) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Today")
@@ -2259,7 +2267,7 @@ struct DailyStepsChartView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 160)
             } else {
-                Chart(chartPoints) { point in
+                Chart(displayChartPoints) { point in
                     LineMark(
                         x: .value("Hour", point.hour),
                         y: .value("Steps", point.cumulativeSteps)
