@@ -38,11 +38,11 @@ class FirebaseManager {
     var isAuthenticated = false
     var currentUID: String? { Auth.auth().currentUser?.uid }
 
-    private var authListener: AuthStateDidChangeListenerHandle?
+    @ObservationIgnored private var authListener: AuthStateDidChangeListenerHandle?
     // Prevents the auth state listener from flipping isAuthenticated during
     // the sign-up flow, which creates and possibly deletes an account before
     // the username check completes.
-    private var suppressAuthStateChanges = false
+    @ObservationIgnored private var suppressAuthStateChanges = false
 
     private init() {
         authListener = Auth.auth().addStateDidChangeListener { [weak self] _, user in

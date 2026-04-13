@@ -14,7 +14,7 @@ class ProfileImageManager {
     static let shared = ProfileImageManager()
 
     var profileImage: UIImage?
-    private var authListener: AuthStateDidChangeListenerHandle?
+    @ObservationIgnored private var authListener: AuthStateDidChangeListenerHandle?
 
     private init() {
         // Load the locally-cached copy immediately on first launch / fresh install.
