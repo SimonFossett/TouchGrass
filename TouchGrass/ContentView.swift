@@ -170,6 +170,7 @@ struct CustomTabBarView: View {
     @State private var tabFrames: [Tab: CGRect] = [:]
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
+    private let profileManager = ProfileImageManager.shared
 
     private let orderedTabs: [(Tab, String)] = [
         (.home,        "house"),
@@ -197,29 +198,35 @@ struct CustomTabBarView: View {
             // ── Icon row ────────────────────────────────────────────────
             HStack(spacing: 0) {
                 ForEach(orderedTabs, id: \.0) { tab, icon in
-                    Image(systemName: icon)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: iconSize, height: iconSize)
-                        .foregroundColor(selectedTab == tab ? .blue : .gray)
-                        .padding(12)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                                selectedTab = tab
-                                dragOffset = 0
-                            }
+                    Group {
+                        if tab == .profile {
+                            profileTabIcon(size: iconSize)
+                        } else {
+                            Image(systemName: icon)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: iconSize, height: iconSize)
+                                .foregroundColor(selectedTab == tab ? .blue : .gray)
                         }
-                        // Each button reports its frame in the "tabBar" space.
-                        .background(
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: TabFrameKey.self,
-                                    value: [tab: proxy.frame(in: .named("tabBar"))]
-                                )
-                            }
-                        )
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                            selectedTab = tab
+                            dragOffset = 0
+                        }
+                    }
+                    // Each button reports its frame in the "tabBar" space.
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: TabFrameKey.self,
+                                value: [tab: proxy.frame(in: .named("tabBar"))]
+                            )
+                        }
+                    )
                 }
             }
             .frame(maxWidth: .infinity)
@@ -254,6 +261,29 @@ struct CustomTabBarView: View {
                     isDragging = false
                 }
         )
+    }
+
+    @ViewBuilder
+    private func profileTabIcon(size: CGFloat) -> some View {
+        if let img = profileManager.profileImage {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+                .overlay(
+                    Circle().strokeBorder(
+                        selectedTab == .profile ? Color.blue : Color.gray.opacity(0.5),
+                        lineWidth: 1.5
+                    )
+                )
+        } else {
+            Image(systemName: "person.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .foregroundColor(selectedTab == .profile ? .blue : .gray)
+        }
     }
 
     // Returns the nearest tab to a given x position in the "tabBar" space.
