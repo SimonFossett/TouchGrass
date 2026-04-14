@@ -479,8 +479,6 @@ class HomeViewModel {
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var selectedFriend: Friend? = nil
-    @State private var showProfileMenu = false
-    @State private var showEditProfile = false
     @State private var showFriendSearch = false
     @State private var showInbox = false
     private let profileManager = ProfileImageManager.shared
@@ -503,37 +501,22 @@ struct HomeView: View {
         VStack(spacing: 0) {
             // Header: profile pic · search circle · (spacer) · inbox circle
             HStack(spacing: 12) {
-                // Profile picture button
-                Button {
-                    showProfileMenu = true
-                } label: {
-                    if let img = profileManager.profileImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 58, height: 58)
-                            .clipShape(Circle())
-                    } else {
-                        Circle()
-                            .fill(Color(UIColor.systemGray3))
-                            .frame(width: 58, height: 58)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 26))
-                            )
-                    }
-                }
-                .confirmationDialog("", isPresented: $showProfileMenu, titleVisibility: .hidden) {
-                    Button("Edit Profile") { showEditProfile = true }
-                    Button("Sign Out", role: .destructive) {
-                        ProfileImageManager.shared.clearImage()
-                        do {
-                            try FirebaseManager.shared.signOut()
-                        } catch {
-                            viewModel.errorMessage = error.localizedDescription
-                        }
-                    }
+                // Profile picture
+                if let img = profileManager.profileImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 58, height: 58)
+                        .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color(UIColor.systemGray3))
+                        .frame(width: 58, height: 58)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.white)
+                                .font(.system(size: 26))
+                        )
                 }
 
                 // Circular search button
@@ -667,9 +650,6 @@ struct HomeView: View {
                 selectedFriend = nil
             }
             .presentationDetents([.medium])
-        }
-        .sheet(isPresented: $showEditProfile) {
-            EditProfileView()
         }
         .fullScreenCover(isPresented: $showInbox) {
             FriendRequestsInboxView(viewModel: viewModel)
@@ -1391,41 +1371,28 @@ struct SearchView: View {
     @State private var selectedUser: AppUser? = nil
     @State private var isLoading = false
     @State private var searchFailed = false
-    @State private var showProfileMenu = false
-    @State private var showEditProfile = false
     private let profileManager = ProfileImageManager.shared
 
     var body: some View {
         VStack(spacing: 0) {
             // Header: profile picture + search bar
             HStack(spacing: 12) {
-                // Profile picture button
-                Button {
-                    showProfileMenu = true
-                } label: {
-                    if let img = profileManager.profileImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 58, height: 58)
-                            .clipShape(Circle())
-                    } else {
-                        Circle()
-                            .fill(Color(UIColor.systemGray3))
-                            .frame(width: 58, height: 58)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 26))
-                            )
-                    }
-                }
-                .confirmationDialog("", isPresented: $showProfileMenu, titleVisibility: .hidden) {
-                    Button("Edit Profile") { showEditProfile = true }
-                    Button("Sign Out", role: .destructive) {
-                        ProfileImageManager.shared.clearImage()
-                        do { try FirebaseManager.shared.signOut() } catch {}
-                    }
+                // Profile picture
+                if let img = profileManager.profileImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 58, height: 58)
+                        .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color(UIColor.systemGray3))
+                        .frame(width: 58, height: 58)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.white)
+                                .font(.system(size: 26))
+                        )
                 }
 
                 // Search bar
@@ -1535,9 +1502,6 @@ struct SearchView: View {
                 requestStatuses[user.id] = newStatus
             }
             .presentationDetents([.medium])
-        }
-        .sheet(isPresented: $showEditProfile) {
-            EditProfileView()
         }
     }
 }
@@ -1741,8 +1705,6 @@ struct ProfileView: View {
     private let leaderboardService = LeaderboardService.shared
     @State private var username: String = ""
     @State private var errorMessage: String? = nil
-    @State private var showProfileMenu = false
-    @State private var showEditProfile = false
     @State private var showSettings = false
     @Environment(\.tabBarCompact) private var tabBarCompact
 
@@ -1762,37 +1724,22 @@ struct ProfileView: View {
                         }
                     )
 
-                // MARK: Profile picture (centered, tappable)
-                Button {
-                    showProfileMenu = true
-                } label: {
-                    ZStack {
-                        if let img = profileManager.profileImage {
-                            Image(uiImage: img)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
-                                .overlay(Circle().strokeBorder(Color(UIColor.systemGray4), lineWidth: 1))
-                        } else {
-                            Circle()
-                                .fill(Color(UIColor.systemGray3))
-                                .frame(width: 120, height: 120)
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.white)
-                        }
-                    }
-                }
-                .confirmationDialog("", isPresented: $showProfileMenu, titleVisibility: .hidden) {
-                    Button("Edit Profile") { showEditProfile = true }
-                    Button("Sign Out", role: .destructive) {
-                        ProfileImageManager.shared.clearImage()
-                        do {
-                            try FirebaseManager.shared.signOut()
-                        } catch {
-                            errorMessage = error.localizedDescription
-                        }
+                // MARK: Profile picture
+                ZStack {
+                    if let img = profileManager.profileImage {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 120, height: 120)
+                            .clipShape(Circle())
+                            .overlay(Circle().strokeBorder(Color(UIColor.systemGray4), lineWidth: 1))
+                    } else {
+                        Circle()
+                            .fill(Color(UIColor.systemGray3))
+                            .frame(width: 120, height: 120)
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.white)
                     }
                 }
                 .padding(.top, 48)
@@ -1830,20 +1777,8 @@ struct ProfileView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .sheet(isPresented: $showEditProfile) {
-            EditProfileView()
-        }
         .fullScreenCover(isPresented: $showSettings) {
             SettingsView()
-        }
-        .onChange(of: showEditProfile) { _, isShowing in
-            if !isShowing {
-                Task {
-                    if let user = try? await UserService.shared.fetchCurrentUser() {
-                        username = user.username
-                    }
-                }
-            }
         }
         .onChange(of: showSettings) { _, isShowing in
             if !isShowing {
