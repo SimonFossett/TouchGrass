@@ -2442,7 +2442,7 @@ struct AppleHealthCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Apple Health")
                         .font(.headline)
-                    Text("Connect Apple Watch for step precision")
+                    Text("Connect Apple Watch for Data Precision")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
