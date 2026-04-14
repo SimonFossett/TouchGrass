@@ -2317,11 +2317,27 @@ struct DailyStepsChartView: View {
         isLoading = true
         let hourlyMine = await StepCounterManager.shared.fetchHourlySteps()
 
+        // stepManager.dailySteps is the authoritative count (max of CMPedometer and
+        // HealthKit). The hourly query only uses CMPedometer, so the chart's final
+        // point must be clamped up to dailySteps to stay in sync with the card above.
+        let authoritativeDailySteps = stepManager.dailySteps
+
         // Always anchor midnight at 0. Each hourly reading covers startOfDay→(hour+1)am,
         // so shift it forward by 1 on the x-axis so hour-0 data plots at x=1, not x=0.
         var points: [StepChartPoint] = [StepChartPoint(hour: 0, cumulativeSteps: 0, label: "You")]
-        for reading in hourlyMine {
-            points.append(StepChartPoint(hour: reading.hour + 1, cumulativeSteps: reading.steps, label: "You"))
+        for (index, reading) in hourlyMine.enumerated() {
+            let isLast = index == hourlyMine.count - 1
+            // For the final hour, use whichever is higher so the chart endpoint
+            // exactly matches the Daily Steps value shown on the profile card.
+            let steps = isLast ? max(reading.steps, authoritativeDailySteps) : reading.steps
+            points.append(StepChartPoint(hour: reading.hour + 1, cumulativeSteps: steps, label: "You"))
+        }
+        // If CMPedometer returned no hourly data (e.g. first launch or simulator)
+        // but we do have a daily step count from HealthKit, plot a single point so
+        // the chart is never blank when the card shows a non-zero value.
+        if hourlyMine.isEmpty && authoritativeDailySteps > 0 {
+            let currentHour = Calendar.current.component(.hour, from: Date())
+            points.append(StepChartPoint(hour: currentHour + 1, cumulativeSteps: authoritativeDailySteps, label: "You"))
         }
 
         let currentHour = Calendar.current.component(.hour, from: Date())
