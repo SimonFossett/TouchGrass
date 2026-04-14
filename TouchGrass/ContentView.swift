@@ -200,7 +200,7 @@ struct CustomTabBarView: View {
                 ForEach(orderedTabs, id: \.0) { tab, icon in
                     Group {
                         if tab == .profile {
-                            profileTabIcon(size: iconSize)
+                            profileTabIcon(size: iconSize + 6)
                         } else {
                             Image(systemName: icon)
                                 .resizable()
