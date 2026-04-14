@@ -69,10 +69,24 @@ struct ContentView: View {
     private let firebase = FirebaseManager.shared
 
     var body: some View {
-        if firebase.isAuthenticated {
-            mainApp
-        } else {
-            AuthView()
+        ZStack {
+            if firebase.isAuthenticated {
+                mainApp
+            } else {
+                AuthView()
+            }
+
+            if firebase.showAuthTransitionSplash {
+                SplashView()
+                    .transition(.opacity)
+                    .zIndex(1)
+                    .task {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        withAnimation(.easeOut(duration: 0.5)) {
+                            firebase.showAuthTransitionSplash = false
+                        }
+                    }
+            }
         }
     }
 
