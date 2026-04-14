@@ -9,15 +9,18 @@ struct AuthView: View {
     @State private var isSignUp = false
     @State private var email = ""
     @State private var password = ""
+    @State private var confirmPassword = ""
     @State private var username = ""
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var showPassword = false
+    @State private var showConfirmPassword = false
     @State private var showPasswordReset = false
     @State private var logoRotation: Double = 0
     @State private var resolvedFontName: String = "Billabong"
     @FocusState private var focusedField: AuthField?
 
-    private enum AuthField { case username, email, password }
+    private enum AuthField { case username, email, password, confirmPassword }
 
     private func spin() {
         withAnimation(.easeInOut(duration: 0.5)) { logoRotation += 360 }
@@ -84,11 +87,53 @@ struct AuthView: View {
                     .background(GlassBackground(cornerRadius: 10))
                     .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
-                SecureField("Password", text: $password)
+                ZStack(alignment: .trailing) {
+                    Group {
+                        if showPassword {
+                            TextField("Password", text: $password)
+                        } else {
+                            SecureField("Password", text: $password)
+                        }
+                    }
                     .focused($focusedField, equals: .password)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
                     .padding()
+                    .padding(.trailing, 40)
+
+                    Button(action: { showPassword.toggle() }) {
+                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.trailing, 12)
+                }
+                .background(GlassBackground(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+
+                if isSignUp {
+                    ZStack(alignment: .trailing) {
+                        Group {
+                            if showConfirmPassword {
+                                TextField("Verify Password", text: $confirmPassword)
+                            } else {
+                                SecureField("Verify Password", text: $confirmPassword)
+                            }
+                        }
+                        .focused($focusedField, equals: .confirmPassword)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .padding()
+                        .padding(.trailing, 40)
+
+                        Button(action: { showConfirmPassword.toggle() }) {
+                            Image(systemName: showConfirmPassword ? "eye.slash" : "eye")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.trailing, 12)
+                    }
                     .background(GlassBackground(cornerRadius: 10))
                     .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                }
 
                 if !isSignUp {
                     HStack {
@@ -141,6 +186,9 @@ struct AuthView: View {
                 spin()
                 isSignUp.toggle()
                 errorMessage = ""
+                confirmPassword = ""
+                showPassword = false
+                showConfirmPassword = false
             }) {
                 Text(isSignUp
                      ? "Already have an account? Sign In"
@@ -196,6 +244,10 @@ struct AuthView: View {
             }
             guard password.count >= 6 else {
                 errorMessage = "Password must be at least 6 characters."
+                return
+            }
+            guard password == confirmPassword else {
+                errorMessage = "Passwords do not match."
                 return
             }
         }
