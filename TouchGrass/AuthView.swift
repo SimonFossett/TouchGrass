@@ -101,7 +101,10 @@ struct AuthView: View {
                     .padding()
                     .padding(.trailing, 40)
 
-                    Button(action: { showPassword.toggle() }) {
+                    Button(action: {
+                        showPassword.toggle()
+                        DispatchQueue.main.async { focusedField = .password }
+                    }) {
                         Image(systemName: showPassword ? "eye.slash" : "eye")
                             .foregroundColor(.secondary)
                     }
@@ -125,7 +128,10 @@ struct AuthView: View {
                         .padding()
                         .padding(.trailing, 40)
 
-                        Button(action: { showConfirmPassword.toggle() }) {
+                        Button(action: {
+                            showConfirmPassword.toggle()
+                            DispatchQueue.main.async { focusedField = .confirmPassword }
+                        }) {
                             Image(systemName: showConfirmPassword ? "eye.slash" : "eye")
                                 .foregroundColor(.secondary)
                         }
