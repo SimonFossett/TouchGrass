@@ -1713,6 +1713,7 @@ struct ProfileView: View {
     @State private var errorMessage: String? = nil
     @State private var showProfileMenu = false
     @State private var showEditProfile = false
+    @State private var showSettings = false
     @Environment(\.tabBarCompact) private var tabBarCompact
 
     var body: some View {
@@ -1802,6 +1803,9 @@ struct ProfileView: View {
         .sheet(isPresented: $showEditProfile) {
             EditProfileView()
         }
+        .fullScreenCover(isPresented: $showSettings) {
+            SettingsView()
+        }
         .onChange(of: showEditProfile) { _, isShowing in
             if !isShowing {
                 Task {
@@ -1811,7 +1815,29 @@ struct ProfileView: View {
                 }
             }
         }
+        .onChange(of: showSettings) { _, isShowing in
+            if !isShowing {
+                Task {
+                    if let user = try? await UserService.shared.fetchCurrentUser() {
+                        username = user.username
+                    }
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 90) }
+        .overlay(alignment: .topTrailing) {
+            Button { showSettings = true } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.primary)
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            }
+            .padding(.trailing, 20)
+            .padding(.top, 16)
+        }
         .coordinateSpace(name: "profileScroll")
         .onPreferenceChange(ScrollOffsetKey.self) { offset in
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -1835,6 +1861,85 @@ struct ProfileView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+    }
+}
+
+// MARK: - Settings View
+
+struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var showEditProfile = false
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Color(UIColor.systemGroupedBackground).ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // ── Header ──
+                ZStack {
+                    Text("Settings")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .frame(maxWidth: .infinity)
+
+                    HStack {
+                        Button(action: { dismiss() }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .semibold))
+                                Text("Back")
+                                    .fontWeight(.medium)
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                            .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
+                        }
+                        Spacer()
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 28)
+
+                // ── Rows ──
+                VStack(spacing: 10) {
+                    settingsRow(icon: "person.fill", title: "Edit Profile") {
+                        showEditProfile = true
+                    }
+                }
+                .padding(.horizontal, 20)
+
+                Spacer()
+            }
+        }
+        .sheet(isPresented: $showEditProfile) {
+            EditProfileView()
+        }
+    }
+
+    @ViewBuilder
+    private func settingsRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .foregroundColor(.green)
+                    .frame(width: 28)
+                Text(title)
+                    .foregroundColor(.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundColor(Color(UIColor.tertiaryLabel))
+                    .font(.caption.weight(.semibold))
+            }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+        }
+        .background(GlassBackground(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
     }
 }
 
