@@ -36,6 +36,7 @@ class FirebaseManager {
     static let shared = FirebaseManager()
 
     var isAuthenticated = false
+    var showAuthTransitionSplash = false
     var currentUID: String? { Auth.auth().currentUser?.uid }
 
     @ObservationIgnored private var authListener: AuthStateDidChangeListenerHandle?
@@ -84,7 +85,8 @@ class FirebaseManager {
                 "createdAt": FieldValue.serverTimestamp()
             ])
 
-            // Sign-up fully succeeded — now allow navigation to the main app.
+            // Sign-up fully succeeded — show transition splash then navigate to the main app.
+            showAuthTransitionSplash = true
             isAuthenticated = true
         } catch {
             // Clean up the auth account if anything after creation fails.
@@ -94,7 +96,13 @@ class FirebaseManager {
     }
 
     func signIn(email: String, password: String) async throws {
-        try await Auth.auth().signIn(withEmail: email, password: password)
+        showAuthTransitionSplash = true
+        do {
+            try await Auth.auth().signIn(withEmail: email, password: password)
+        } catch {
+            showAuthTransitionSplash = false
+            throw error
+        }
     }
 
     func sendPasswordReset(email: String) async throws {
