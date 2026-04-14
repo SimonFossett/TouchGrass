@@ -1869,6 +1869,7 @@ struct ProfileView: View {
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showEditProfile = false
+    @State private var errorMessage: String?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -1910,6 +1911,15 @@ struct SettingsView: View {
                     settingsRow(icon: "person.fill", title: "Edit Profile") {
                         showEditProfile = true
                     }
+                    settingsRow(icon: "rectangle.portrait.and.arrow.right", title: "Sign Out", tint: .red) {
+                        ProfileImageManager.shared.clearImage()
+                        do {
+                            try FirebaseManager.shared.signOut()
+                            dismiss()
+                        } catch {
+                            errorMessage = error.localizedDescription
+                        }
+                    }
                 }
                 .padding(.horizontal, 20)
 
@@ -1919,17 +1929,25 @@ struct SettingsView: View {
         .sheet(isPresented: $showEditProfile) {
             EditProfileView()
         }
+        .alert("Sign Out Failed", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
     @ViewBuilder
-    private func settingsRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
+    private func settingsRow(icon: String, title: String, tint: Color = .green, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .foregroundColor(.green)
+                    .foregroundColor(tint)
                     .frame(width: 28)
                 Text(title)
-                    .foregroundColor(.primary)
+                    .foregroundColor(tint == .green ? .primary : tint)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .foregroundColor(Color(UIColor.tertiaryLabel))
