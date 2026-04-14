@@ -88,19 +88,23 @@ struct AuthView: View {
                     .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
 
                 ZStack(alignment: .trailing) {
-                    PasswordInputField(
-                        placeholder: "Password",
-                        text: $password,
-                        isSecure: !showPassword,
-                        isFocused: Binding(
-                            get: { focusedField == .password },
-                            set: { focusedField = $0 ? .password : nil }
-                        )
-                    )
+                    Group {
+                        if showPassword {
+                            TextField("Password", text: $password)
+                        } else {
+                            SecureField("Password", text: $password)
+                        }
+                    }
+                    .focused($focusedField, equals: .password)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
                     .padding()
                     .padding(.trailing, 40)
 
-                    Button(action: { showPassword.toggle() }) {
+                    Button(action: {
+                        showPassword.toggle()
+                        DispatchQueue.main.async { focusedField = .password }
+                    }) {
                         Image(systemName: showPassword ? "eye.slash" : "eye")
                             .foregroundColor(.secondary)
                     }
@@ -111,19 +115,23 @@ struct AuthView: View {
 
                 if isSignUp {
                     ZStack(alignment: .trailing) {
-                        PasswordInputField(
-                            placeholder: "Verify Password",
-                            text: $confirmPassword,
-                            isSecure: !showConfirmPassword,
-                            isFocused: Binding(
-                                get: { focusedField == .confirmPassword },
-                                set: { focusedField = $0 ? .confirmPassword : nil }
-                            )
-                        )
+                        Group {
+                            if showConfirmPassword {
+                                TextField("Verify Password", text: $confirmPassword)
+                            } else {
+                                SecureField("Verify Password", text: $confirmPassword)
+                            }
+                        }
+                        .focused($focusedField, equals: .confirmPassword)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
                         .padding()
                         .padding(.trailing, 40)
 
-                        Button(action: { showConfirmPassword.toggle() }) {
+                        Button(action: {
+                            showConfirmPassword.toggle()
+                            DispatchQueue.main.async { focusedField = .confirmPassword }
+                        }) {
                             Image(systemName: showConfirmPassword ? "eye.slash" : "eye")
                                 .foregroundColor(.secondary)
                         }
@@ -370,69 +378,6 @@ struct PasswordResetView: View {
                 errorMessage = error.localizedDescription
             }
             isLoading = false
-        }
-    }
-}
-
-// MARK: - Password Input Field
-// UIViewRepresentable wrapping a single UITextField so that toggling
-// isSecureTextEntry never dismisses the keyboard — SwiftUI's SecureField/
-// TextField swap destroys and recreates the underlying UITextField each time,
-// which always causes a keyboard dismiss/re-appear cycle.
-
-private struct PasswordInputField: UIViewRepresentable {
-    let placeholder: String
-    @Binding var text: String
-    let isSecure: Bool
-    @Binding var isFocused: Bool
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    func makeUIView(context: Context) -> UITextField {
-        let tf = UITextField()
-        tf.placeholder = placeholder
-        tf.isSecureTextEntry = isSecure
-        tf.autocorrectionType = .no
-        tf.autocapitalizationType = .none
-        tf.borderStyle = .none
-        tf.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        tf.delegate = context.coordinator
-        tf.addTarget(context.coordinator,
-                     action: #selector(Coordinator.textChanged),
-                     for: .editingChanged)
-        return tf
-    }
-
-    func updateUIView(_ tf: UITextField, context: Context) {
-        context.coordinator.parent = self
-        if tf.text != text { tf.text = text }
-        if tf.isSecureTextEntry != isSecure {
-            let saved = tf.text
-            tf.isSecureTextEntry = isSecure
-            tf.text = saved
-        }
-        if isFocused && !tf.isFirstResponder {
-            tf.becomeFirstResponder()
-        } else if !isFocused && tf.isFirstResponder {
-            tf.resignFirstResponder()
-        }
-    }
-
-    final class Coordinator: NSObject, UITextFieldDelegate {
-        var parent: PasswordInputField
-
-        init(_ parent: PasswordInputField) { self.parent = parent }
-
-        @objc func textChanged(_ tf: UITextField) {
-            parent.text = tf.text ?? ""
-        }
-
-        func textFieldDidBeginEditing(_ textField: UITextField) {
-            parent.isFocused = true
-        }
-
-        func textFieldDidEndEditing(_ textField: UITextField) {
-            parent.isFocused = false
         }
     }
 }
