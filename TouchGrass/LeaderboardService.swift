@@ -25,15 +25,10 @@ struct LeaderboardEntry: Identifiable, Equatable {
     let dailySteps: Int
     let totalStepScore: Int
     let dailyStreak: Int
-    let overallStreak: Int
     let isCurrentUser: Bool
 
     func value(for type: LeaderboardType) -> Int {
         type == .daily ? dailySteps : totalStepScore
-    }
-
-    func streak(for type: LeaderboardType) -> Int {
-        type == .daily ? dailyStreak : overallStreak
     }
 }
 
@@ -98,7 +93,6 @@ class LeaderboardService {
                         dailySteps: dailySteps,
                         totalStepScore: data["stepScore"] as? Int ?? 0,
                         dailyStreak: data["dailyStreak"] as? Int ?? 0,
-                        overallStreak: data["overallStreak"] as? Int ?? 0,
                         isCurrentUser: isCurrentUser
                     )
 
