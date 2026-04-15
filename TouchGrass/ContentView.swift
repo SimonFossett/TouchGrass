@@ -1699,6 +1699,17 @@ struct UserProfileSheet: View {
     }
 }
 
+private enum ProfileTab: CaseIterable {
+    case activity, blank
+
+    var icon: String {
+        switch self {
+        case .activity: return "chart.bar.fill"
+        case .blank:    return "square.grid.2x2.fill"
+        }
+    }
+}
+
 struct ProfileView: View {
     private let profileManager    = ProfileImageManager.shared
     private let stepManager       = StepCounterManager.shared
@@ -1706,6 +1717,7 @@ struct ProfileView: View {
     @State private var username: String = ""
     @State private var errorMessage: String? = nil
     @State private var showSettings = false
+    @State private var selectedProfileTab: ProfileTab = .activity
     @Environment(\.tabBarCompact) private var tabBarCompact
 
     var body: some View {
@@ -1756,23 +1768,65 @@ struct ProfileView: View {
                     }
                 }
 
-                // MARK: Step metrics — daily steps card
-                StepMetricCard(
-                    value: stepManager.dailySteps.formatted(),
-                    label: "Daily Steps",
-                    icon: "figure.walk",
-                    color: .green
-                )
-                .padding(.horizontal, 24)
+                // MARK: Profile tab bar
+                VStack(spacing: 0) {
+                    HStack(spacing: 0) {
+                        ForEach(ProfileTab.allCases, id: \.self) { tab in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedProfileTab = tab
+                                }
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Image(systemName: tab.icon)
+                                        .font(.system(size: 20))
+                                        .foregroundColor(selectedProfileTab == tab ? .primary : .secondary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.top, 10)
+                                        .padding(.bottom, 6)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    // Sliding indicator
+                    GeometryReader { geo in
+                        let tabCount = CGFloat(ProfileTab.allCases.count)
+                        let tabWidth = geo.size.width / tabCount
+                        let index = CGFloat(ProfileTab.allCases.firstIndex(of: selectedProfileTab) ?? 0)
+                        Rectangle()
+                            .fill(Color.primary)
+                            .frame(width: tabWidth, height: 1.5)
+                            .offset(x: tabWidth * index)
+                            .animation(.easeInOut(duration: 0.2), value: selectedProfileTab)
+                    }
+                    .frame(height: 1.5)
+                }
+                .padding(.horizontal, 0)
 
-                // MARK: Today's steps comparison chart
-                DailyStepsChartView(entries: leaderboardService.entries)
+                // MARK: Tab content
+                if selectedProfileTab == .activity {
+                    // Step metrics — daily steps card
+                    StepMetricCard(
+                        value: stepManager.dailySteps.formatted(),
+                        label: "Daily Steps",
+                        icon: "figure.walk",
+                        color: .green
+                    )
                     .padding(.horizontal, 24)
 
-                // MARK: Apple Health
-                AppleHealthCard()
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 32)
+                    // Today's steps comparison chart
+                    DailyStepsChartView(entries: leaderboardService.entries)
+                        .padding(.horizontal, 24)
+
+                    // Apple Health
+                    AppleHealthCard()
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
+                } else {
+                    // Blank — not yet implemented
+                    Spacer().frame(height: 32)
+                }
 
             }
             .frame(maxWidth: .infinity)
