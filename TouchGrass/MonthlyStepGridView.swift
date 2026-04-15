@@ -106,6 +106,7 @@ struct MonthlyStepGridView: View {
     private let stepManager = StepCounterManager.shared
 
     @State private var displayedMonth: Date = Calendar.current.startOfMonth(for: Date())
+    @State private var selectedCellIndex: Int? = nil
 
     private let maxMonthsBack = 12
     private let calendar      = Calendar.current
@@ -177,8 +178,25 @@ struct MonthlyStepGridView: View {
             // ── Calendar grid ─────────────────────────────────────────────
             let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
             LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(Array(cells.enumerated()), id: \.offset) { _, cell in
-                    StepGridCell(date: cell.date, steps: cell.steps)
+                ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
+                    StepGridCell(
+                        date: cell.date,
+                        steps: cell.steps,
+                        isSelected: selectedCellIndex == index
+                    )
+                    .onTapGesture {
+                        guard cell.date != nil else { return }
+                        selectedCellIndex = selectedCellIndex == index ? nil : index
+                    }
+                    .popover(
+                        isPresented: Binding(
+                            get: { selectedCellIndex == index },
+                            set: { if !$0 { selectedCellIndex = nil } }
+                        )
+                    ) {
+                        StepDayPopover(date: cell.date!, steps: cell.steps)
+                            .presentationCompactAdaptation(.popover)
+                    }
                 }
             }
 
@@ -211,6 +229,9 @@ struct MonthlyStepGridView: View {
         .onChange(of: stepManager.dailySteps) { _, newValue in
             gridManager.saveSteps(newValue, for: Date())
         }
+        .onChange(of: displayedMonth) { _, _ in
+            selectedCellIndex = nil
+        }
     }
 
     // MARK: - Navigation Button
@@ -236,6 +257,7 @@ struct MonthlyStepGridView: View {
 private struct StepGridCell: View {
     let date: Date?
     let steps: Int
+    var isSelected: Bool = false
 
     private var isToday: Bool {
         guard let date else { return false }
@@ -250,15 +272,49 @@ private struct StepGridCell: View {
                     .fill(stepColor(for: steps))
                     .frame(width: side, height: side)
                     .overlay(
-                        isToday
-                            ? RoundedRectangle(cornerRadius: 3)
-                                .strokeBorder(.white.opacity(0.55), lineWidth: 1.5)
-                            : nil
+                        RoundedRectangle(cornerRadius: 3)
+                            .strokeBorder(
+                                isSelected
+                                    ? Color.white
+                                    : (isToday ? Color.white.opacity(0.55) : Color.clear),
+                                lineWidth: isSelected ? 2 : 1.5
+                            )
                     )
             } else {
                 Color.clear.frame(width: side, height: side)
             }
         }
         .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+// MARK: - Day Popup
+
+private struct StepDayPopover: View {
+    let date: Date
+    let steps: Int
+
+    private var dayString: String {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM d"
+        return f.string(from: date)
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(dayString)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(stepColor(for: steps))
+                    .frame(width: 10, height: 10)
+                Text(steps == 0 ? "No steps recorded" : "\(steps.formatted()) steps")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 }
