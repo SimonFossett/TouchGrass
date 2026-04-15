@@ -14,7 +14,6 @@ struct AppUser: Identifiable {
     var stepScore: Int
     var dailySteps: Int = 0
     var dailyStreak: Int = 0
-    var overallStreak: Int = 0
 }
 
 class UserService {
@@ -64,8 +63,7 @@ class UserService {
             username: username,
             stepScore: doc.data()?["stepScore"] as? Int ?? 0,
             dailySteps: doc.data()?["dailySteps"] as? Int ?? 0,
-            dailyStreak: doc.data()?["dailyStreak"] as? Int ?? 0,
-            overallStreak: doc.data()?["overallStreak"] as? Int ?? 0
+            dailyStreak: doc.data()?["dailyStreak"] as? Int ?? 0
         )
     }
 

@@ -2003,7 +2003,6 @@ struct LeaderboardView: View {
                 dailySteps: stepManager.dailySteps,
                 totalStepScore: stepManager.totalStepScore,
                 dailyStreak: entry.dailyStreak,
-                overallStreak: entry.overallStreak,
                 isCurrentUser: true
             )
         }
@@ -2161,11 +2160,10 @@ struct LeaderboardRowView: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .center)
 
-                // Streak + steps (right-aligned, fixed area)
+                // Streak (Daily Steps only) + value
                 HStack(spacing: 6) {
-                    let streak = entry.streak(for: type)
-                    if streak > 0 {
-                        StreakBadge(streak: streak)
+                    if type == .daily && entry.dailyStreak > 0 {
+                        StreakBadge(streak: entry.dailyStreak)
                     }
                     Text(entry.value(for: type).formatted())
                         .font(.system(size: 12, weight: .semibold))
