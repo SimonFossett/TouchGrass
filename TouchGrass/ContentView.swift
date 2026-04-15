@@ -1701,13 +1701,6 @@ struct UserProfileSheet: View {
 
 private enum ProfileTab: CaseIterable {
     case activity, grid
-
-    var icon: String {
-        switch self {
-        case .activity: return "chart.bar.fill"
-        case .grid:     return "calendar.badge.clock"
-        }
-    }
 }
 
 struct ProfileView: View {
@@ -1778,12 +1771,20 @@ struct ProfileView: View {
                                 }
                             } label: {
                                 VStack(spacing: 6) {
-                                    Image(systemName: tab.icon)
-                                        .font(.system(size: 20))
-                                        .foregroundColor(selectedProfileTab == tab ? .primary : .secondary)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.top, 10)
-                                        .padding(.bottom, 6)
+                                    Group {
+                                        switch tab {
+                                        case .activity:
+                                            Image(systemName: "chart.bar.fill")
+                                                .font(.system(size: 20))
+                                                .foregroundColor(selectedProfileTab == tab ? .primary : .secondary)
+                                        case .grid:
+                                            StepGridTabIcon()
+                                                .opacity(selectedProfileTab == tab ? 1 : 0.4)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 10)
+                                    .padding(.bottom, 6)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -2339,6 +2340,36 @@ struct GlassBackground: View {
                             )
                         )
                 )
+        }
+    }
+}
+
+// MARK: - Step Grid Tab Icon
+// 2×2 grid of rounded squares progressing through the step-count color scale.
+
+private struct StepGridTabIcon: View {
+    // Reading order: top-left → top-right → bottom-left → bottom-right
+    private let colors: [Color] = [
+        Color(UIColor.systemGray5),                                  // dark gray   (0 steps)
+        Color(red: 0.054, green: 0.267, blue: 0.161),               // very dark green
+        Color(red: 0.149, green: 0.651, blue: 0.255),               // medium green
+        Color(red: 0.341, green: 1.000, blue: 0.541),               // brightest green
+    ]
+
+    var body: some View {
+        let gap: CGFloat   = 2
+        let cell: CGFloat  = 9
+        let radius: CGFloat = 2
+
+        VStack(spacing: gap) {
+            HStack(spacing: gap) {
+                RoundedRectangle(cornerRadius: radius).fill(colors[0]).frame(width: cell, height: cell)
+                RoundedRectangle(cornerRadius: radius).fill(colors[1]).frame(width: cell, height: cell)
+            }
+            HStack(spacing: gap) {
+                RoundedRectangle(cornerRadius: radius).fill(colors[2]).frame(width: cell, height: cell)
+                RoundedRectangle(cornerRadius: radius).fill(colors[3]).frame(width: cell, height: cell)
+            }
         }
     }
 }
