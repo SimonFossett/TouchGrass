@@ -63,6 +63,10 @@ class StepCounterManager {
             // Capture the final step count BEFORE resetting so streak logic
             // can compare against friends who haven't reached midnight yet.
             let finalSteps = self.dailySteps
+            // Persist today's final count to the step grid before rolling over.
+            if finalSteps > 0 {
+                StepGridManager.shared.saveSteps(finalSteps, for: Date())
+            }
             self.dailyPedometer.stopUpdates()
             self.dailySteps = 0
             Task {

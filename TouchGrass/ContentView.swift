@@ -1700,12 +1700,12 @@ struct UserProfileSheet: View {
 }
 
 private enum ProfileTab: CaseIterable {
-    case activity, blank
+    case activity, grid
 
     var icon: String {
         switch self {
         case .activity: return "chart.bar.fill"
-        case .blank:    return "square.grid.2x2.fill"
+        case .grid:     return "calendar.badge.clock"
         }
     }
 }
@@ -1824,8 +1824,10 @@ struct ProfileView: View {
                         .padding(.horizontal, 24)
                         .padding(.bottom, 32)
                 } else {
-                    // Blank — not yet implemented
-                    Spacer().frame(height: 32)
+                    // Monthly step grid (GitHub-style)
+                    MonthlyStepGridView()
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
                 }
 
             }
