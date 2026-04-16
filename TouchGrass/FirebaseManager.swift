@@ -52,6 +52,7 @@ class FirebaseManager {
         }
     }
 
+    // Creates a new Firebase Auth account, verifies username availability, and writes the user document.
     @MainActor
     func signUp(email: String, password: String, username: String) async throws {
         // Validate format before touching the network
@@ -95,6 +96,7 @@ class FirebaseManager {
         }
     }
 
+    // Signs the user in with email and password, showing the transition splash on success.
     func signIn(email: String, password: String) async throws {
         showAuthTransitionSplash = true
         do {
@@ -105,6 +107,7 @@ class FirebaseManager {
         }
     }
 
+    // Verifies the email exists in Firestore then triggers a Firebase Auth password-reset email.
     func sendPasswordReset(email: String) async throws {
         let normalizedEmail = email.trimmingCharacters(in: .whitespaces).lowercased()
 
@@ -123,6 +126,7 @@ class FirebaseManager {
         try await Auth.auth().sendPasswordReset(withEmail: normalizedEmail)
     }
 
+    // Signs the current user out of Firebase Auth.
     func signOut() throws {
         try Auth.auth().signOut()
     }

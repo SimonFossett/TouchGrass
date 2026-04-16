@@ -22,6 +22,7 @@ struct AuthView: View {
 
     private enum AuthField { case username, email, password, confirmPassword }
 
+    // Spins the app logo 360° with a short ease-in-out animation.
     private func spin() {
         withAnimation(.easeInOut(duration: 0.5)) { logoRotation += 360 }
     }
@@ -229,6 +230,7 @@ struct AuthView: View {
         }
     }
 
+    // Validates the form fields then calls sign-up or sign-in via FirebaseManager.
     private func submit() {
         errorMessage = ""
 
@@ -367,6 +369,7 @@ struct PasswordResetView: View {
         }
     }
 
+    // Sends a password-reset email and shows success or error feedback.
     private func sendReset() {
         errorMessage = ""
         isLoading = true

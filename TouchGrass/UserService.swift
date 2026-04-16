@@ -106,6 +106,7 @@ class UserService {
         return fmt.string(from: Date())
     }
 
+    // Returns the previous calendar day as a yyyy-MM-dd string in the device's local time zone.
     static func yesterdayDateString() -> String {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd"

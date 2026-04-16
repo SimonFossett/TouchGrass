@@ -71,6 +71,7 @@ class StoryService {
 
     // MARK: - Start / Stop Listening
 
+    // Attaches Firestore listeners for the current user's stories and one listener per friend UID.
     func startListening(friendUIDs: [String]) {
         listeners.forEach { $0.remove() }
         listeners.removeAll()
@@ -136,6 +137,7 @@ class StoryService {
 
     // MARK: - Post Story
 
+    // Downsizes the image, uploads it to Firebase Storage, and writes a Firestore story document with a 24-hour expiry.
     func postStory(image: UIImage) async throws {
         guard let uid = Auth.auth().currentUser?.uid else { return }
 
@@ -196,6 +198,7 @@ class StoryService {
 
     // MARK: - Image Helpers
 
+    // Scales the image down to a max dimension of 1920 px to reduce upload size without quality loss.
     private func downsampleForStory(_ image: UIImage) -> UIImage {
         let maxDimension: CGFloat = 1920
         let px = CGSize(width:  image.size.width  * image.scale,
@@ -214,6 +217,7 @@ class StoryService {
 
     // MARK: - Mark Seen
 
+    // Records a story as seen in UserDefaults and updates the hasUnseenStory flag for all friends.
     func markSeen(storyID: String) {
         guard !seenIDs.contains(storyID) else { return }
         seenIDs.insert(storyID)
@@ -225,6 +229,7 @@ class StoryService {
 
     // MARK: - Load Story Image (cached)
 
+    // Downloads a story's image from its URL and caches it in memory for subsequent accesses.
     func loadImage(for story: Story) async -> UIImage? {
         if let cached = Self.imageCache[story.id] { return cached }
         guard let url = URL(string: story.imageURL),
@@ -259,6 +264,7 @@ class StoryService {
         }
     }
 
+    // Deletes any of the current user's Firestore story documents whose expiresAt timestamp has passed.
     private func deleteExpiredOwnStories() {
         guard let myUID = Auth.auth().currentUser?.uid else { return }
         Task {
@@ -276,6 +282,7 @@ class StoryService {
 
     // MARK: - Private Helpers
 
+    // Converts Firestore documents into Story values, filtering out any that have already expired.
     private func parseStories(from docs: [QueryDocumentSnapshot]) -> [Story] {
         let now = Date()
         return docs.compactMap { doc -> Story? in
@@ -298,6 +305,7 @@ class StoryService {
         .sorted { $0.createdAt < $1.createdAt }
     }
 
+    // Fetches the username string for the given UID from the Firestore users collection.
     private func fetchUsername(uid: String) async throws -> String {
         let doc = try await db.collection("users").document(uid).getDocument()
         return doc.data()?["username"] as? String ?? "Unknown"

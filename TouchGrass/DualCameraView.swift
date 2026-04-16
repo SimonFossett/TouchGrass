@@ -19,10 +19,12 @@ struct DualCameraView: UIViewControllerRepresentable {
     /// Called when the user dismisses without posting.
     let onDismiss: () -> Void
 
+    // Creates and returns the UIKit camera host controller.
     func makeUIViewController(context: Context) -> DualCameraHostVC {
         DualCameraHostVC(onPost: onPost, onDismiss: onDismiss)
     }
 
+    // No dynamic updates are needed after the view controller is created.
     func updateUIViewController(_ vc: DualCameraHostVC, context: Context) {}
 }
 
@@ -81,6 +83,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - Lifecycle
 
+    // Sets up the black background, static UI elements, and initiates camera permission check on first load.
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
@@ -88,6 +91,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         checkCameraPermission()
     }
 
+    // Updates the back preview layer and PiP size constraints whenever the view's bounds change.
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         backPreviewLayer?.frame = view.bounds
@@ -98,6 +102,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         pipHeightConstraint?.constant = pipSize.height
     }
 
+    // Stops any running capture sessions on a background thread when the view is about to disappear.
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         DispatchQueue.global(qos: .background).async { [weak self] in
@@ -108,6 +113,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - Camera Permission
 
+    // Checks the current camera authorization status and either starts setup or shows an error.
     private func checkCameraPermission() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -123,6 +129,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         }
     }
 
+    // Displays a centered label instructing the user to grant camera access in Settings.
     private func showPermissionError() {
         let lbl = UILabel()
         lbl.text = "Camera access is required.\n\nGo to Settings → Privacy & Security → Camera → TouchGrass"
@@ -142,6 +149,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - Camera Setup (background thread)
 
+    // Dispatches camera configuration to a background thread, choosing MultiCam or fallback mode.
     private func startCameraSetup() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
@@ -154,6 +162,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         }
     }
 
+    // Configures an AVCaptureMultiCamSession with simultaneous back and front camera inputs and photo outputs.
     private func configureMultiCamSession() {
         let s = AVCaptureMultiCamSession()
         s.beginConfiguration()
@@ -197,6 +206,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         isMultiCam      = true
     }
 
+    // Configures a single-camera AVCaptureSession using only the back camera for devices that don't support MultiCam.
     private func configureFallbackSession() {
         let s = AVCaptureSession()
         s.sessionPreset = .photo
@@ -215,6 +225,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - Preview Layer Attachment (main thread)
 
+    // Attaches AVCaptureVideoPreviewLayer instances to the view for both back (full-screen) and front (PiP) cameras.
     private func attachPreviewLayers() {
         // --- Back camera (full-screen) ---
         let backLayer = AVCaptureVideoPreviewLayer()
@@ -264,6 +275,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - Static UI
 
+    // Constructs and lays out the PiP container, close button, capture button, and hint label.
     private func buildStaticUI() {
         // PiP container
         let pipSize = computePiPSize()
@@ -346,6 +358,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         ])
     }
 
+    // Calculates the PiP container size as 32% of the view width with a 4:3 aspect ratio.
     private func computePiPSize() -> CGSize {
         let w = max(100, view.bounds.width * 0.32)
         return CGSize(width: w, height: w * (4.0 / 3.0))
@@ -353,6 +366,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - Gestures
 
+    // Moves the PiP container view to follow the user's drag gesture.
     @objc private func handlePiPDrag(_ g: UIPanGestureRecognizer) {
         guard let pip = g.view else { return }
         let t = g.translation(in: view)
@@ -360,10 +374,12 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         g.setTranslation(.zero, in: view)
     }
 
+    // Dismisses the camera screen without posting a story.
     @objc private func closeTapped()   { onDismiss() }
 
     // MARK: - Capture
 
+    // Fires both camera outputs simultaneously (or just the back camera in fallback mode) and waits for both photos.
     @objc private func captureTapped() {
         captureButton.isEnabled = false
         backPhoto  = nil
@@ -384,6 +400,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - AVCapturePhotoCaptureDelegate
 
+    // Receives each captured photo, corrects its orientation, mirrors the front camera image, and stores the result.
     func photoOutput(_ output: AVCapturePhotoOutput,
                      didFinishProcessingPhoto photo: AVCapturePhoto,
                      error: Error?) {
@@ -408,6 +425,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - Preview Screen
 
+    // Composites the captured photos and displays a full-screen preview with Retake and Post Story buttons.
     private func showPreview() {
         guard let back = backPhoto else { captureButton.isEnabled = true; return }
 
@@ -485,6 +503,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         stack.addArrangedSubview(postBtn)
     }
 
+    // Discards the preview and restores the live camera view so the user can take another photo.
     @objc private func retakeTapped() {
         previewContainerView?.removeFromSuperview()
         previewContainerView = nil
@@ -499,6 +518,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
         closeButton.isHidden      = false
     }
 
+    // Passes the composited image to the onPost callback to trigger the story upload.
     @objc private func postTapped() {
         guard let composite = pendingComposite else { return }
         onPost(composite)
@@ -544,12 +564,14 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - Image Utilities
 
+    // Redraws the image upright if its orientation metadata is not already .up.
     private func fixOrientation(_ image: UIImage) -> UIImage {
         guard image.imageOrientation != .up else { return image }
         let renderer = UIGraphicsImageRenderer(size: image.size)
         return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: image.size)) }
     }
 
+    // Flips the image horizontally to correct the front camera's mirrored output.
     private func mirror(_ image: UIImage) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: image.size)
         return renderer.image { ctx in
@@ -561,6 +583,7 @@ final class DualCameraHostVC: UIViewController, AVCapturePhotoCaptureDelegate {
 
     // MARK: - UIKit Helpers
 
+    // Creates a styled rounded UIButton with the given title and background color.
     private func makeButton(title: String, bg: UIColor) -> UIButton {
         let btn = UIButton(type: .system)
         btn.setTitle(title, for: .normal)

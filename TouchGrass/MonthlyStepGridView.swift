@@ -27,6 +27,7 @@ final class StepGridManager {
     // MARK: - Save / Load
 
     /// Saves `steps` for `date`, only if the new value is higher than what's already stored.
+    // Persists the step count for a given date, only overwriting if the new value is higher.
     func saveSteps(_ steps: Int, for date: Date) {
         guard steps > 0 else { return }
         let key = keyPrefix + formatter.string(from: date)
@@ -36,6 +37,7 @@ final class StepGridManager {
         }
     }
 
+    // Returns the stored step count for the given date, or 0 if no data has been saved.
     func steps(for date: Date) -> Int {
         let key = keyPrefix + formatter.string(from: date)
         return defaults.integer(forKey: key)
@@ -45,6 +47,7 @@ final class StepGridManager {
 
     /// Returns one cell per calendar slot for the given month's grid.
     /// Slots before the 1st and after the last day of the month have `date == nil`.
+    // Builds the full 7-column calendar grid for the given month, padding with nil dates before the 1st and after the last day.
     func gridCells(for month: Date) -> [(date: Date?, steps: Int)] {
         let cal = Calendar.current
         let firstDay = cal.startOfMonth(for: month)
@@ -65,6 +68,7 @@ final class StepGridManager {
     }
 
     /// Sum of all saved step counts within the given month.
+    // Sums all saved step counts for every day in the given month.
     func monthlyTotal(for month: Date) -> Int {
         let cal = Calendar.current
         let firstDay = cal.startOfMonth(for: month)
@@ -80,6 +84,7 @@ final class StepGridManager {
 
 extension Calendar {
     /// The first instant of the month containing `date`.
+    // Returns the first instant (midnight) of the month containing the given date.
     func startOfMonth(for date: Date) -> Date {
         let comps = dateComponents([.year, .month], from: date)
         return self.date(from: comps) ?? date
@@ -88,6 +93,7 @@ extension Calendar {
 
 // MARK: - Step → Color Mapping
 
+// Maps a step count to a green intensity color, ranging from dark gray (0) to brightest green (10k+).
 private func stepColor(for steps: Int) -> Color {
     switch steps {
     case 0:              return Color(UIColor.systemGray5)                      // no activity
@@ -236,6 +242,7 @@ struct MonthlyStepGridView: View {
 
     // MARK: - Navigation Button
 
+    // Renders a circular chevron button that triggers the given action, dimmed when disabled.
     @ViewBuilder
     private func navButton(systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button {

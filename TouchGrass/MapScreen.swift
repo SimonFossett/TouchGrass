@@ -65,6 +65,7 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
 
     // MARK: - CLLocationManagerDelegate
 
+    // Receives new GPS fixes, centers the map on the first fix, and throttle-uploads the coordinate to Firestore.
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
 
@@ -92,6 +93,7 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    // Starts location updates when authorization is granted or upgraded.
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
         if status == .authorizedWhenInUse || status == .authorizedAlways {
             locationManager.startUpdatingLocation()
@@ -140,6 +142,7 @@ class MapViewModel: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    // Removes all active friend-location Firestore listeners.
     func stopFriendLocationListeners() {
         friendListeners.forEach { $0.remove() }
         friendListeners.removeAll()
@@ -179,6 +182,7 @@ struct MapAvatarView: View {
         }
     }
 
+    // Returns a deterministic color for a user's avatar based on their name hash.
     private func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]

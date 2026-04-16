@@ -137,6 +137,7 @@ struct ContentView: View {
     @State private var showMotionSheet = false
     @State private var motionPermissionDenied = false
 
+    // Checks CMPedometer authorization and shows the permission sheet if access is denied or undetermined.
     private func checkMotionPermission() {
         switch CMPedometer.authorizationStatus() {
         case .denied, .restricted:
@@ -263,6 +264,7 @@ struct CustomTabBarView: View {
         )
     }
 
+    // Returns the user's profile photo cropped to a circle, or a default person icon if none is set.
     @ViewBuilder
     private func profileTabIcon(size: CGFloat) -> some View {
         if let img = profileManager.profileImage {
@@ -320,6 +322,7 @@ class HomeViewModel {
 
     // MARK: Listeners
 
+    // Opens Firestore real-time listeners for both incoming and outgoing friend-request collections.
     private func startRequestListeners() {
         guard let myUID = Auth.auth().currentUser?.uid else { isLoading = false; return }
 
@@ -350,6 +353,7 @@ class HomeViewModel {
         requestListeners = [incoming, outgoing]
     }
 
+    // Tears down all active listeners and restarts them, forcing a full data reload.
     func refresh() {
         stopAll()
         friends = []
@@ -360,6 +364,7 @@ class HomeViewModel {
 
     // MARK: State derivation
 
+    // Derives the current friends list and pending requests from raw Firestore snapshot documents.
     @MainActor
     private func recomputeState() async {
         var pendingUIDs: [String] = []
@@ -407,6 +412,7 @@ class HomeViewModel {
         if isLoading { isLoading = false }
     }
 
+    // Attaches a Firestore snapshot listener to a single friend's document and keeps their Friend model up to date.
     private func attachFriendListener(uid: String, pinnedIDs: Set<String>) {
         let listener = db.collection("users").document(uid)
             .addSnapshotListener { [weak self] snapshot, _ in
@@ -437,6 +443,7 @@ class HomeViewModel {
 
     // MARK: Actions
 
+    // Accepts an incoming friend request from the given user UID.
     func acceptRequest(from uid: String) {
         Task { @MainActor [weak self] in
             do { try await FriendService.shared.acceptRequest(from: uid) }
@@ -444,6 +451,7 @@ class HomeViewModel {
         }
     }
 
+    // Declines an incoming friend request from the given user UID.
     func declineRequest(from uid: String) {
         Task { @MainActor [weak self] in
             do { try await FriendService.shared.denyRequest(from: uid) }
@@ -451,6 +459,7 @@ class HomeViewModel {
         }
     }
 
+    // Removes the friend with the given UID from the current user's friend list.
     func removeFriend(uid: String) {
         Task { @MainActor [weak self] in
             do { try await FriendService.shared.removeFriend(uid) }
@@ -458,6 +467,7 @@ class HomeViewModel {
         }
     }
 
+    // Toggles the pinned state for the friend with the given UID and persists the change to UserDefaults.
     func togglePin(uid: String) {
         guard let idx = friends.firstIndex(where: { $0.uid == uid }) else { return }
         friends[idx].isPinned.toggle()
@@ -467,6 +477,7 @@ class HomeViewModel {
         UserDefaults.standard.set(Array(pinned), forKey: "pinnedFriendIDs")
     }
 
+    // Removes all active Firestore listeners and clears their references.
     private func stopAll() {
         requestListeners.forEach { $0.remove() }
         friendDocListeners.values.forEach { $0.remove() }
@@ -938,6 +949,7 @@ struct FriendSearchView: View {
         }
     }
 
+    // Records the selected friend in the recents list, notifies the caller, and dismisses the search sheet.
     private func selectFriend(_ friend: Friend) {
         var recents = recentUIDs.filter { $0 != friend.uid }
         recents.insert(friend.uid, at: 0)
@@ -989,6 +1001,7 @@ struct RecentFriendCard: View {
         }
     }
 
+    // Returns a deterministic color for an avatar based on the hash of the user's name.
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
@@ -1157,6 +1170,7 @@ struct FriendRequestRow: View {
         }
     }
 
+    // Returns a deterministic color for an avatar based on the hash of the user's name.
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
@@ -1239,6 +1253,7 @@ struct FriendRow: View {
         }
     }
 
+    // Returns a deterministic color for an avatar based on the hash of the user's name.
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
@@ -1357,6 +1372,7 @@ struct FriendDetailSheet: View {
         }
     }
 
+    // Returns a deterministic color for an avatar based on the hash of the user's name.
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
@@ -1572,6 +1588,7 @@ struct UserSearchRow: View {
         }
     }
 
+    // Returns a deterministic color for an avatar based on the hash of the user's name.
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
@@ -1678,6 +1695,7 @@ struct UserProfileSheet: View {
         }
     }
 
+    // Sends a friend request to the displayed user and updates the button state on success.
     private func sendRequest() {
         guard status == .none else { return }
         isSending = true
@@ -1693,6 +1711,7 @@ struct UserProfileSheet: View {
         }
     }
 
+    // Returns a deterministic color for an avatar based on the hash of the user's name.
     func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
@@ -1961,6 +1980,7 @@ struct SettingsView: View {
         }
     }
 
+    // Builds a tappable settings row with an SF Symbol icon, title label, and chevron.
     @ViewBuilder
     private func settingsRow(icon: String, title: String, tint: Color = .green, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -2103,6 +2123,7 @@ struct LeaderboardView: View {
         }
     }
 
+    // Loads the most recent story image for the current leaderboard leader to use as a background.
     @MainActor
     private func loadFirstPlaceStory() async {
         guard let firstPlace = sorted.first else {
@@ -2196,6 +2217,7 @@ struct LeaderboardRowView: View {
         }
     }
 
+    // Converts an integer rank to its ordinal string representation (e.g. 1 → "1st", 2 → "2nd").
     private func ordinal(_ n: Int) -> String {
         let ones = n % 10, tens = (n % 100) / 10
         let suffix: String
@@ -2250,6 +2272,7 @@ struct LeaderboardAvatarView: View {
         }
     }
 
+    // Returns a deterministic color for an avatar based on the hash of the user's name.
     private func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
@@ -2259,6 +2282,7 @@ struct LeaderboardAvatarView: View {
 // MARK: - Keyboard Helpers
 
 extension View {
+    // Adds a simultaneous tap gesture that dismisses the keyboard when the view is tapped.
     func dismissKeyboardOnTap() -> some View {
         simultaneousGesture(TapGesture().onEnded {
             UIApplication.shared.sendAction(
@@ -2499,6 +2523,7 @@ struct DailyStepsChartView: View {
         .onChange(of: stepManager.dailySteps) { _, _ in Task { await buildChartData() } }
     }
 
+    // Fetches hourly step data for the current user and builds chart points for the user and comparison friends.
     @MainActor
     private func buildChartData() async {
         isLoading = true
@@ -2541,6 +2566,7 @@ struct DailyStepsChartView: View {
         isLoading = false
     }
 
+    // Converts a 24-hour integer to a compact AM/PM label for the chart x-axis (e.g. 0 → "12a", 13 → "1p").
     private func hourLabel(_ hour: Int) -> String {
         if hour == 0 || hour == 24 { return "12a" }
         if hour < 12 { return "\(hour)a" }
@@ -2883,6 +2909,7 @@ struct StoryAvatarImage: View {
         }
     }
 
+    // Returns a deterministic color for an avatar based on the hash of the user's name.
     private func avatarColor(for name: String) -> Color {
         let colors: [Color] = [.blue, .green, .orange, .purple, .pink, .teal, .red, .indigo]
         return colors[abs(name.hashValue) % colors.count]
@@ -3013,6 +3040,7 @@ struct StoryViewerView: View {
 
     // MARK: - Navigation
 
+    // Advances to the next story or next user's stories, dismissing the viewer if there are no more.
     private func goToNext() {
         if currentStoryIndex < currentUser.stories.count - 1 {
             currentStoryIndex += 1
@@ -3024,6 +3052,7 @@ struct StoryViewerView: View {
         }
     }
 
+    // Returns to the previous story or the last story of the previous user.
     private func goToPrevious() {
         if currentStoryIndex > 0 {
             currentStoryIndex -= 1
@@ -3035,6 +3064,7 @@ struct StoryViewerView: View {
 
     // MARK: - Story Loading + Timer
 
+    // Downloads the current story image, marks it seen, then animates the progress bar and auto-advances when complete.
     @MainActor
     private func loadAndRunStory() async {
         isLoadingImage = true
@@ -3063,6 +3093,7 @@ struct StoryViewerView: View {
         goToNext()
     }
 
+    // Returns a short human-readable string indicating how long ago a story was posted (e.g. "5m ago", "2h ago").
     private func timeAgo(_ date: Date) -> String {
         let secs = Int(Date().timeIntervalSince(date))
         if secs < 3600 { return "\(max(1, secs / 60))m ago" }
