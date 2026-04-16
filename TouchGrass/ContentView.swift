@@ -1846,10 +1846,6 @@ struct ProfileView: View {
                     // Monthly step grid (GitHub-style)
                     MonthlyStepGridView()
                         .padding(.horizontal, 24)
-
-                    // Full-year heatmap (same underlying data)
-                    YearStepGridView()
-                        .padding(.horizontal, 24)
                         .padding(.bottom, 32)
                 }
 
