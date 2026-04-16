@@ -1318,8 +1318,8 @@ struct FriendDetailSheet: View {
 
             // Step score
             HStack(spacing: 6) {
-                Image(systemName: "star.fill")
-                    .foregroundColor(.orange)
+                Image(systemName: "figure.walk")
+                    .foregroundColor(.green)
                 Text("Step Score: \(friend.stepScore)")
                     .font(.headline)
             }
@@ -1336,7 +1336,7 @@ struct FriendDetailSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(friend.isPinned ? Color(UIColor.systemGray4) : Color.orange)
+                .background(friend.isPinned ? Color(UIColor.systemGray4) : Color.green)
                 .foregroundColor(friend.isPinned ? .primary : .white)
                 .cornerRadius(12)
             }
