@@ -21,6 +21,11 @@ class StepCounterManager {
     private let dailyPedometer = CMPedometer()
     private let totalPedometer = CMPedometer()
 
+    // 24-slot cumulative snapshot: hourlyStepsSnapshot[h] = highest step count
+    // recorded during hour h today. Written to Firestore so friends' charts can
+    // plot real progression instead of a linear projection.
+    @ObservationIgnored var hourlyStepsSnapshot: [Int] = Array(repeating: 0, count: 24)
+
     private init() {
         guard CMPedometer.isStepCountingAvailable() else {
             print("Step counting not available on this device")
@@ -37,13 +42,18 @@ class StepCounterManager {
     private func startDailyTracking() {
         let startOfDay = Calendar.current.startOfDay(for: Date())
         dailyPedometer.startUpdates(from: startOfDay) { [weak self] data, _ in
-            guard let steps = data?.numberOfSteps.intValue else { return }
+            guard let self, let steps = data?.numberOfSteps.intValue else { return }
             // Take the higher of CMPedometer and any HealthKit sync persisted
             // today. Without this, a CMPedometer update would overwrite a
             // HealthKit value that was set after the user tapped Sync.
             let effective = max(steps, HealthKitManager.todaysPersistedSteps)
-            DispatchQueue.main.async { self?.dailySteps = effective }
-            Task { await UserService.shared.updateDailySteps(effective) }
+            let hour = Calendar.current.component(.hour, from: Date())
+            DispatchQueue.main.async {
+                self.dailySteps = effective
+                self.hourlyStepsSnapshot[hour] = max(self.hourlyStepsSnapshot[hour], effective)
+                let snapshot = self.hourlyStepsSnapshot
+                Task { await UserService.shared.updateDailySteps(effective, hourlySteps: snapshot) }
+            }
         }
     }
 
@@ -71,6 +81,7 @@ class StepCounterManager {
             }
             self.dailyPedometer.stopUpdates()
             self.dailySteps = 0
+            self.hourlyStepsSnapshot = Array(repeating: 0, count: 24)
             Task {
                 // Evaluate streak, archive yesterday's count, then reset to 0.
                 await UserService.shared.updateStreakAtMidnight(myFinalSteps: finalSteps)
