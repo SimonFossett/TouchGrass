@@ -1495,7 +1495,6 @@ struct SearchView: View {
                 .scrollDismissesKeyboard(.immediately)
             }
         }
-        .contentShape(Rectangle())
         .dismissKeyboardOnTap()
         // Re-runs automatically when searchText changes; cancels the previous task
         .task(id: searchText) {
