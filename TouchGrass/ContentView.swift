@@ -1427,7 +1427,8 @@ struct SearchView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
-                .background(Color(UIColor.systemGray5), in: Capsule())
+                .background(.ultraThinMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
