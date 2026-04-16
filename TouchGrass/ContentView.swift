@@ -1774,16 +1774,9 @@ struct ProfileView: View {
                         Text(username)
                             .font(.title2)
                             .fontWeight(.bold)
-                        HStack(spacing: 0) {
-                            AnimatedStepCounter(
-                                value: stepManager.totalStepScore,
-                                font: .subheadline,
-                                color: .secondary
-                            )
-                            Text(" step score")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                        Text("\(stepManager.totalStepScore.formatted()) step score")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
                     }
                 }
 
@@ -1835,7 +1828,7 @@ struct ProfileView: View {
                 if selectedProfileTab == .activity {
                     // Step metrics — daily steps card
                     StepMetricCard(
-                        value: stepManager.dailySteps,
+                        value: stepManager.dailySteps.formatted(),
                         label: "Daily Steps",
                         icon: "figure.walk",
                         color: .green
@@ -2106,12 +2099,7 @@ struct LeaderboardView: View {
                     } else {
                         VStack(spacing: 8) {
                             ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, entry in
-                                LeaderboardRowView(
-                                    placing: idx + 1,
-                                    entry: entry,
-                                    type: leaderboardType,
-                                    animationDelay: Double(idx) * 0.07
-                                )
+                                LeaderboardRowView(placing: idx + 1, entry: entry, type: leaderboardType)
                             }
                         }
                         .padding(.horizontal, 24)
@@ -2166,7 +2154,6 @@ struct LeaderboardRowView: View {
     let placing: Int
     let entry: LeaderboardEntry
     let type: LeaderboardType
-    var animationDelay: Double = 0
 
     var body: some View {
         HStack(spacing: 8) {
@@ -2199,12 +2186,10 @@ struct LeaderboardRowView: View {
                     if type == .daily && entry.dailyStreak > 0 {
                         StreakBadge(streak: entry.dailyStreak)
                     }
-                    AnimatedStepCounter(
-                        value: entry.value(for: type),
-                        font: .system(size: 12, weight: .semibold),
-                        color: .secondary,
-                        delay: animationDelay
-                    )
+                    Text(entry.value(for: type).formatted())
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
                 }
                 .padding(.trailing, 10)
             }
@@ -2414,7 +2399,7 @@ private struct StepGridTabIcon: View {
 // MARK: - Step Metric Card
 
 struct StepMetricCard: View {
-    let value: Int
+    let value: String
     let label: String
     let icon: String
     let color: Color
@@ -2424,7 +2409,9 @@ struct StepMetricCard: View {
             Image(systemName: icon)
                 .font(.system(size: 22))
                 .foregroundColor(color)
-            AnimatedStepCounter(value: value, font: .system(size: 26, weight: .bold))
+            Text(value)
+                .font(.system(size: 26, weight: .bold))
+                .monospacedDigit()
             Text(label)
                 .font(.caption)
                 .foregroundColor(.secondary)
