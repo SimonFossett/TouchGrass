@@ -2023,7 +2023,8 @@ struct LeaderboardView: View {
                 dailySteps: stepManager.dailySteps,
                 totalStepScore: stepManager.totalStepScore,
                 dailyStreak: entry.dailyStreak,
-                isCurrentUser: true
+                isCurrentUser: true,
+                hourlySteps: stepManager.hourlyStepsSnapshot
             )
         }
     }
@@ -2554,12 +2555,32 @@ struct DailyStepsChartView: View {
 
         let currentHour = Calendar.current.component(.hour, from: Date())
         for entry in comparisonEntries {
-            // Anchor friends at midnight too
             points.append(StepChartPoint(hour: 0, cumulativeSteps: 0, label: entry.username))
-            for hour in 0...currentHour {
-                let fraction = Double(hour + 1) / Double(currentHour + 1)
-                let projected = Int(Double(entry.dailySteps) * fraction)
-                points.append(StepChartPoint(hour: hour + 1, cumulativeSteps: projected, label: entry.username))
+            if !entry.hourlySteps.isEmpty {
+                // Forward-fill the snapshot so gaps between updates produce a
+                // monotonically increasing staircase rather than dips to zero.
+                var filled = entry.hourlySteps
+                for h in 1..<filled.count {
+                    if filled[h] == 0 { filled[h] = filled[h - 1] }
+                }
+                // Plot every non-zero hour up to the current hour.
+                for h in 0...min(currentHour, filled.count - 1) where filled[h] > 0 {
+                    points.append(StepChartPoint(hour: h + 1, cumulativeSteps: filled[h], label: entry.username))
+                }
+                // Ensure the line endpoint matches their authoritative daily total.
+                if entry.dailySteps > 0 {
+                    let lastPlotted = points.last(where: { $0.label == entry.username })?.cumulativeSteps ?? 0
+                    if entry.dailySteps > lastPlotted {
+                        points.append(StepChartPoint(hour: currentHour + 1, cumulativeSteps: entry.dailySteps, label: entry.username))
+                    }
+                }
+            } else {
+                // Fallback: linear projection when no hourly data has been synced yet.
+                for hour in 0...currentHour {
+                    let fraction = Double(hour + 1) / Double(currentHour + 1)
+                    let projected = Int(Double(entry.dailySteps) * fraction)
+                    points.append(StepChartPoint(hour: hour + 1, cumulativeSteps: projected, label: entry.username))
+                }
             }
         }
         chartPoints = points

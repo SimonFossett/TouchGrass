@@ -84,14 +84,20 @@ class UserService {
     /// Also writes `dailyStepsDate` (yyyy-MM-dd in local time) so readers can
     /// detect stale values from a previous day and treat them as zero.
     /// Writes are throttled to at most once every 30 seconds.
-    func updateDailySteps(_ steps: Int) async {
+    func updateDailySteps(_ steps: Int, hourlySteps: [Int] = []) async {
         guard Date().timeIntervalSince(lastDailyStepsWrite) >= stepWriteInterval else { return }
         guard let uid = Auth.auth().currentUser?.uid else { return }
+        let today = Self.todayDateString()
+        var update: [String: Any] = [
+            "dailySteps":     steps,
+            "dailyStepsDate": today
+        ]
+        if !hourlySteps.isEmpty {
+            update["hourlySteps"]     = hourlySteps
+            update["hourlyStepsDate"] = today
+        }
         do {
-            try await db.collection("users").document(uid).updateData([
-                "dailySteps":     steps,
-                "dailyStepsDate": Self.todayDateString()
-            ])
+            try await db.collection("users").document(uid).updateData(update)
             lastDailyStepsWrite = Date()
         } catch {
             print("[UserService] updateDailySteps failed: \(error)")

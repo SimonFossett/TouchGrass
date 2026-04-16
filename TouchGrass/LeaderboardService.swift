@@ -26,6 +26,9 @@ struct LeaderboardEntry: Identifiable, Equatable {
     let totalStepScore: Int
     let dailyStreak: Int
     let isCurrentUser: Bool
+    /// 24-slot cumulative snapshot written by StepCounterManager. Index = hour of day;
+    /// value = highest step count recorded during that hour. Empty when not yet synced.
+    let hourlySteps: [Int]
 
     // Returns the relevant step value (daily steps or total score) for a given leaderboard type.
     func value(for type: LeaderboardType) -> Int {
@@ -89,13 +92,19 @@ class LeaderboardService {
                     let storedDate = data["dailyStepsDate"] as? String ?? ""
                     let dailySteps = storedDate == today ? (data["dailySteps"] as? Int ?? 0) : 0
 
+                    let hourlyStepsDate = data["hourlyStepsDate"] as? String ?? ""
+                    let hourlySteps: [Int] = hourlyStepsDate == today
+                        ? (data["hourlySteps"] as? [Int] ?? [])
+                        : []
+
                     let entry = LeaderboardEntry(
                         id: uid,
                         username: username,
                         dailySteps: dailySteps,
                         totalStepScore: data["stepScore"] as? Int ?? 0,
                         dailyStreak: data["dailyStreak"] as? Int ?? 0,
-                        isCurrentUser: isCurrentUser
+                        isCurrentUser: isCurrentUser,
+                        hourlySteps: hourlySteps
                     )
 
                     DispatchQueue.main.async {
