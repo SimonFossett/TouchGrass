@@ -56,6 +56,7 @@ final class AvatarCache {
         }
     }
 
+    // Returns the on-disk cache path for a given user's avatar image.
     private func diskURL(for uid: String) -> URL {
         cacheDir.appendingPathComponent("\(uid).jpg")
     }

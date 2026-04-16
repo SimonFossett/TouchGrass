@@ -54,6 +54,7 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
 }
 
 extension NotificationManager: MessagingDelegate {
+    // Called by Firebase Messaging when a new FCM registration token is available; saves it to Firestore.
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
         saveFCMToken(token)

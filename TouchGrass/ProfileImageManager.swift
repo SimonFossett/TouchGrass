@@ -53,6 +53,7 @@ class ProfileImageManager {
 
     // MARK: - Private
 
+    // Loads the profile image from disk cache, or falls back to downloading it from Firebase Storage.
     private func loadImage() {
         // Fast path: serve from the on-disk cache without a network round-trip.
         if let data  = try? Data(contentsOf: localURL),
@@ -64,6 +65,7 @@ class ProfileImageManager {
         Task { await downloadFromStorage() }
     }
 
+    // Uploads the given JPEG data to the current user's Firebase Storage profile image path.
     private func uploadToStorage(data: Data) async {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         let ref = Storage.storage().reference().child("profile_images/\(uid).jpg")
@@ -76,6 +78,7 @@ class ProfileImageManager {
         }
     }
 
+    // Downloads the current user's profile image from Firebase Storage and caches it locally.
     @MainActor
     private func downloadFromStorage() async {
         guard let uid = Auth.auth().currentUser?.uid else { return }

@@ -49,6 +49,7 @@ class HealthKitManager {
 
     // MARK: - Authorization
 
+    // Prompts the user for HealthKit read access to step count and heart rate, then fetches today's steps.
     func requestAuthorization() {
         guard isAvailable else { return }
         let stepType = HKQuantityType(.stepCount)
@@ -65,6 +66,7 @@ class HealthKitManager {
 
     // MARK: - Step Fetching
 
+    // Queries HealthKit for today's cumulative step count and persists the result to UserDefaults.
     func fetchSteps() {
         guard isAvailable else { return }
         isFetching = true
@@ -99,6 +101,7 @@ class HealthKitManager {
 
     /// Takes the higher of HealthKit and CMPedometer steps, updates the local
     /// step counter, and pushes the value to Firebase so it shows on the leaderboard.
+    // Takes the higher of HealthKit and CMPedometer step counts and pushes it to Firestore for the leaderboard.
     func syncToLeaderboard() {
         guard isAvailable, dailySteps > 0 else { return }
         let effective = max(dailySteps, StepCounterManager.shared.dailySteps)

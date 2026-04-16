@@ -250,6 +250,7 @@ struct CircularPhotoPicker: View {
 
     // MARK: Preview area (image + circle crop overlay)
 
+    // Builds the square preview area showing the selected image with a circular crop overlay and pan/zoom gestures.
     private func previewArea(previewSize: CGFloat) -> some View {
         ZStack {
             Color.black
@@ -300,6 +301,7 @@ struct CircularPhotoPicker: View {
 
     // MARK: Photo grid
 
+    // Renders a 4-column thumbnail grid of recent photos, or a settings prompt if access is denied.
     private func photoGrid(geo: GeometryProxy) -> some View {
         let cols  = 4
         let gap   = CGFloat(1)
@@ -352,6 +354,7 @@ struct CircularPhotoPicker: View {
 
     // MARK: - Actions
 
+    // Loads a high-quality version of the tapped photo asset and displays it in the preview area.
     private func selectAsset(_ asset: PHAsset, previewSize: CGFloat) {
         guard asset.localIdentifier != selectedID else { return }
         selectedID     = asset.localIdentifier
@@ -380,7 +383,7 @@ struct CircularPhotoPicker: View {
         }
     }
 
-    /// Constrain pan so the circle (= previewSize diameter) is always fully covered.
+    // Constrains the pan offset so the circular crop area is always fully covered by the image.
     private func clampOffset(previewSize: CGFloat) {
         let maxPan = (previewSize * scale - previewSize) / 2
         let clamped = CGSize(
@@ -392,6 +395,7 @@ struct CircularPhotoPicker: View {
 
     // MARK: - Crop math
 
+    // Renders a 600 pt circular crop of the image accounting for the current scale and pan offset.
     private func cropImage(_ image: UIImage, previewSize: CGFloat) -> UIImage {
         let outputPt: CGFloat = 600          // output is 600 pt square
         let ratio = outputPt / previewSize   // scale all coordinates to output space
@@ -416,6 +420,7 @@ struct CircularPhotoPicker: View {
 
     // MARK: - Photo library
 
+    // Requests photo library authorization and fetches the 200 most recent image assets.
     private func requestAndLoad(previewSize: CGFloat) async {
         let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         authStatus = current == .notDetermined
@@ -479,6 +484,7 @@ private struct PhotoThumbnailCell: View {
         .task(id: asset.localIdentifier) { await loadThumb() }
     }
 
+    // Fetches a fast low-resolution thumbnail for the photo asset and stores it for display.
     private func loadThumb() async {
         let px = size * displayScale
         let opts = PHImageRequestOptions()
@@ -540,8 +546,10 @@ private struct GestureCapture: UIViewRepresentable {
     @Binding var offset: CGSize
     let onEnd: () -> Void
 
+    // Creates the Coordinator that holds the gesture handler closures.
     func makeCoordinator() -> Coordinator { Coordinator() }
 
+    // Creates a transparent UIView and attaches pinch and pan gesture recognizers to it.
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         view.backgroundColor = .clear
@@ -560,6 +568,7 @@ private struct GestureCapture: UIViewRepresentable {
         return view
     }
 
+    // Injects the current binding accessors into the coordinator so gesture handlers always read and write live values.
     func updateUIView(_ uiView: UIView, context: Context) {
         // Capture bindings by value — Binding<T> holds a reference to the
         // backing State storage, so the closures always read/write current values.
@@ -583,9 +592,11 @@ private struct GestureCapture: UIViewRepresentable {
         private var startScale:  CGFloat = 1
         private var startOffset: CGSize  = .zero
 
+        // Allows pinch and pan to run simultaneously so the user can zoom and drag at the same time.
         func gestureRecognizer(_ g: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
+        // Updates the scale binding as the user pinches, clamping to a minimum of 1× on gesture end.
         @objc func handlePinch(_ g: UIPinchGestureRecognizer) {
             switch g.state {
             case .began:
@@ -598,6 +609,7 @@ private struct GestureCapture: UIViewRepresentable {
             }
         }
 
+        // Updates the offset binding as the user drags, triggering a clamp on gesture end.
         @objc func handlePan(_ g: UIPanGestureRecognizer) {
             let t = g.translation(in: g.view)
             switch g.state {
@@ -616,6 +628,7 @@ private struct GestureCapture: UIViewRepresentable {
 
 // MARK: - Helpers
 
+// Scales an image down so its longest side is at most maxDimension points, preserving aspect ratio.
 private func downsampledImage(_ image: UIImage, maxDimension: CGFloat = 1500) -> UIImage {
     let longest = max(image.size.width, image.size.height)
     guard longest > maxDimension else { return image }

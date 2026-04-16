@@ -27,6 +27,7 @@ struct LeaderboardEntry: Identifiable, Equatable {
     let dailyStreak: Int
     let isCurrentUser: Bool
 
+    // Returns the relevant step value (daily steps or total score) for a given leaderboard type.
     func value(for type: LeaderboardType) -> Int {
         type == .daily ? dailySteps : totalStepScore
     }
@@ -54,6 +55,7 @@ class LeaderboardService {
 
     /// Opens one Firestore snapshot listener per user (self + each friend).
     /// Any subsequent change to a user doc propagates immediately.
+    // Opens one real-time Firestore listener per user (self + friends) and keeps entries updated live.
     func startListening(friendUIDs: [String]) {
         stopListening()
         guard let myUID = Auth.auth().currentUser?.uid else {
@@ -111,6 +113,7 @@ class LeaderboardService {
         }
     }
 
+    // Removes all active Firestore snapshot listeners and clears the listener registry.
     func stopListening() {
         listeners.values.forEach { $0.remove() }
         listeners.removeAll()
@@ -120,6 +123,7 @@ class LeaderboardService {
 
     /// Returns the current user's accepted friends as Friend objects, ready for
     /// the HomeView list. Respects local pin state stored in UserDefaults.
+    // Fetches all accepted friends as Friend objects for use in HomeView, with pin state applied.
     func fetchFriendsForHome() async -> [Friend] {
         let uids = (try? await FriendService.shared.friendUIDs()) ?? []
         let pinnedIDs = Set(UserDefaults.standard.stringArray(forKey: "pinnedFriendIDs") ?? [])

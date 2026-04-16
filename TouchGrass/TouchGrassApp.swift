@@ -11,6 +11,7 @@ import FirebaseMessaging
 import UIKit
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    // Configures Firebase and registers for push notifications when the app finishes launching.
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         FirebaseApp.configure()
@@ -18,6 +19,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
+    // Forwards the APNs device token to Firebase Messaging so FCM can send notifications.
     func application(_ application: UIApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         NotificationManager.shared.setAPNSToken(deviceToken)

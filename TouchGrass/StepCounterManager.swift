@@ -33,6 +33,7 @@ class StepCounterManager {
 
     // MARK: - Daily steps (live, resets at midnight)
 
+    // Starts a live CMPedometer update stream from midnight that keeps dailySteps current throughout the day.
     private func startDailyTracking() {
         let startOfDay = Calendar.current.startOfDay(for: Date())
         dailyPedometer.startUpdates(from: startOfDay) { [weak self] data, _ in
@@ -49,6 +50,7 @@ class StepCounterManager {
     /// Schedules a one-shot timer that fires exactly at the next local midnight,
     /// resets dailySteps to 0, restarts the pedometer from the new day's start,
     /// and then schedules itself again for the following midnight.
+    // Schedules a one-shot timer at the next local midnight to reset dailySteps, save the final count to the grid, and reschedule itself.
     private func scheduleMidnightReset() {
         let calendar = Calendar.current
         guard let nextMidnight = calendar.nextDate(
@@ -81,6 +83,7 @@ class StepCounterManager {
 
     // MARK: - Total step score (cumulative from install date, never decreases)
 
+    // Starts a live CMPedometer stream from the app's install date to track the all-time cumulative step score.
     private func startTotalTracking() {
         let origin = StepCounterManager.installDate
 
@@ -99,6 +102,7 @@ class StepCounterManager {
         }
     }
 
+    // Stops both the daily and total CMPedometer live-update streams.
     func stopTracking() {
         dailyPedometer.stopUpdates()
         totalPedometer.stopUpdates()
@@ -109,6 +113,7 @@ class StepCounterManager {
     /// Returns an array of (hour, cumulativeSteps) pairs from midnight up to and
     /// including the current hour. Each value is the total steps taken from
     /// midnight to the end of that hour, giving a monotonically increasing curve.
+    // Returns cumulative step counts per hour from midnight to now, used to plot the profile chart curve.
     func fetchHourlySteps() async -> [(hour: Int, steps: Int)] {
         guard CMPedometer.isStepCountingAvailable() else { return [] }
         let calendar = Calendar.current

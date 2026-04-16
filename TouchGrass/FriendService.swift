@@ -14,6 +14,7 @@ class FriendService {
     private init() {}
 
     /// Send a friend request from the current user to `toUID`.
+    // Creates a pending friend-request document in Firestore from the current user to toUID.
     func sendRequest(to toUID: String) async throws {
         guard let myUID = Auth.auth().currentUser?.uid else { return }
         try await db.collection("friendRequests")
@@ -27,6 +28,7 @@ class FriendService {
     }
 
     /// Returns the current relationship status between the signed-in user and `userUID`.
+    // Returns the friendship status (none, requested, or friends) between the signed-in user and userUID.
     func status(for userUID: String) async -> FriendRequestStatus {
         guard let myUID = Auth.auth().currentUser?.uid else { return .none }
 
@@ -52,6 +54,7 @@ class FriendService {
     // MARK: - Incoming friend requests
 
     /// Fetch all users who have sent the current user a pending friend request.
+    // Fetches all users who have sent the current user a pending friend request.
     func incomingRequests() async throws -> [AppUser] {
         guard let myUID = Auth.auth().currentUser?.uid else { return [] }
 
@@ -71,6 +74,7 @@ class FriendService {
     }
 
     /// Accept a pending incoming friend request from `fromUID`.
+    // Marks an incoming friend request from fromUID as accepted in Firestore.
     func acceptRequest(from fromUID: String) async throws {
         guard let myUID = Auth.auth().currentUser?.uid else { return }
         try await db.collection("friendRequests")
@@ -79,6 +83,7 @@ class FriendService {
     }
 
     /// Decline a pending incoming friend request from `fromUID`.
+    // Marks an incoming friend request from fromUID as declined in Firestore.
     func denyRequest(from fromUID: String) async throws {
         guard let myUID = Auth.auth().currentUser?.uid else { return }
         try await db.collection("friendRequests")
@@ -86,6 +91,7 @@ class FriendService {
             .updateData(["status": "declined"])
     }
 
+    // Fetches a minimal AppUser (username + step score) for the given uid from Firestore.
     private func fetchUser(uid: String) async throws -> AppUser {
         let doc = try await db.collection("users").document(uid).getDocument()
         let username = doc.data()?["username"] as? String ?? "Unknown"
@@ -96,6 +102,7 @@ class FriendService {
     /// Removes an accepted friendship. Deletes whichever friendRequests document
     /// links the two users (either direction). Both users' real-time listeners
     /// will fire, removing the friend from each other's list automatically.
+    // Deletes the friend-request document(s) linking the current user and friendUID in both directions.
     func removeFriend(_ friendUID: String) async throws {
         guard let myUID = Auth.auth().currentUser?.uid else { return }
         // The document could be stored in either direction — delete both and ignore
@@ -108,6 +115,7 @@ class FriendService {
     }
 
     /// Returns UIDs of all confirmed friends of the current user.
+    // Returns the UIDs of all confirmed friends of the current user from both sent and received requests.
     func friendUIDs() async throws -> [String] {
         guard let myUID = Auth.auth().currentUser?.uid else { return [] }
 
