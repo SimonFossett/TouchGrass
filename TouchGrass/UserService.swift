@@ -124,12 +124,28 @@ class UserService {
         let today     = Self.todayDateString()
         let yesterday = Self.yesterdayDateString()
 
-        // Archive this user's final step count so friends who fire midnight
-        // later can still read it even after this device resets to 0.
-        try? await db.collection("users").document(uid).updateData([
-            "previousDaySteps": myFinalSteps,
-            "previousDayDate":  yesterday
-        ])
+        // Read currentStreak before resetting — needed to compute the winner's
+        // incremented value later. A single read here replaces the second
+        // getDocument() call that used to sit at the end of this function.
+        let ownDoc = try? await db.collection("users").document(uid).getDocument()
+        let currentStreak = ownDoc?.data()?["dailyStreak"] as? Int ?? 0
+
+        // Immediately reset streak to 0 AND archive the final step count in one
+        // write. Doing this first ensures:
+        //   • Losers see their streak disappear right away, even if the
+        //     friend-read loop below is slow or fails silently.
+        //   • Friends who fire midnight later can still read previousDaySteps
+        //     even after this device's dailySteps has been reset to 0.
+        do {
+            try await db.collection("users").document(uid).updateData([
+                "dailyStreak":      0,
+                "previousDaySteps": myFinalSteps,
+                "previousDayDate":  yesterday
+            ])
+        } catch {
+            print("[UserService] updateStreakAtMidnight — initial reset failed: \(error)")
+            // Continue anyway so the winner computation still runs.
+        }
 
         // Determine the highest step count among friends for yesterday.
         var maxFriendSteps = 0
@@ -158,10 +174,16 @@ class UserService {
             won = myFinalSteps > 0 && myFinalSteps > maxFriendSteps
         }
 
-        guard let myDoc = try? await db.collection("users").document(uid).getDocument() else { return }
-        let currentStreak = myDoc.data()?["dailyStreak"] as? Int ?? 0
-        let newStreak = won ? currentStreak + 1 : 0
-        try? await db.collection("users").document(uid).updateData(["dailyStreak": newStreak])
+        // Only write again if the user won — losers already have streak = 0
+        // from the early reset above, so no second write is needed for them.
+        if won {
+            let newStreak = currentStreak + 1
+            do {
+                try await db.collection("users").document(uid).updateData(["dailyStreak": newStreak])
+            } catch {
+                print("[UserService] updateStreakAtMidnight — winner increment failed: \(error)")
+            }
+        }
     }
 
     /// Resets the current user's daily steps to 0 in Firestore.
