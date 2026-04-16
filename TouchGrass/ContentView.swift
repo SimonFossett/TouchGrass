@@ -490,6 +490,7 @@ class HomeViewModel {
 struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var selectedFriend: Friend? = nil
+    @State private var profileFriend: Friend? = nil
     @State private var showFriendSearch = false
     @State private var showInbox = false
     private let profileManager = ProfileImageManager.shared
@@ -659,8 +660,16 @@ struct HomeView: View {
             } onRemove: {
                 viewModel.removeFriend(uid: friend.uid)
                 selectedFriend = nil
+            } onViewProfile: {
+                // Dismiss the sheet first, then present the full-screen profile
+                // on the next run loop tick so the transitions don't collide.
+                selectedFriend = nil
+                DispatchQueue.main.async { profileFriend = friend }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.medium, .large])
+        }
+        .fullScreenCover(item: $profileFriend) { friend in
+            FriendProfileView(friend: friend)
         }
         .fullScreenCover(isPresented: $showInbox) {
             FriendRequestsInboxView(viewModel: viewModel)
@@ -1284,6 +1293,7 @@ struct FriendDetailSheet: View {
     let friend: Friend
     let onPin: () -> Void
     let onRemove: () -> Void
+    let onViewProfile: () -> Void
 
     @State private var showRemoveConfirm = false
     @State private var profileImage: UIImage? = nil
@@ -1327,6 +1337,20 @@ struct FriendDetailSheet: View {
             .padding(.vertical, 10)
             .background(Color(UIColor.systemGray6))
             .cornerRadius(10)
+
+            // View Profile button
+            Button(action: onViewProfile) {
+                HStack {
+                    Image(systemName: "person.crop.circle")
+                    Text("View Profile")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Color(UIColor.systemGray5))
+                .foregroundColor(.primary)
+                .cornerRadius(12)
+            }
+            .padding(.horizontal, 30)
 
             // Pin / Unpin button
             Button(action: onPin) {
@@ -2371,7 +2395,7 @@ struct GlassBackground: View {
 // MARK: - Step Grid Tab Icon
 // 2×2 grid of rounded squares progressing through the step-count color scale.
 
-private struct StepGridTabIcon: View {
+struct StepGridTabIcon: View {
     // Reading order: top-left → top-right → bottom-left → bottom-right
     private let colors: [Color] = [
         Color(UIColor.systemGray5),                                  // dark gray   (0 steps)

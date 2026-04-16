@@ -108,6 +108,11 @@ private func stepColor(for steps: Int) -> Color {
 // MARK: - Monthly Step Grid View
 
 struct MonthlyStepGridView: View {
+    /// When non-nil, the grid renders in read-only "friend" mode: today's cell
+    /// shows `friendTodaySteps` and every other day is empty. Friend daily
+    /// history isn't stored in Firestore, so earlier days always read as 0.
+    var friendTodaySteps: Int? = nil
+
     private let gridManager = StepGridManager.shared
     private let stepManager = StepCounterManager.shared
 
@@ -118,12 +123,26 @@ struct MonthlyStepGridView: View {
     private let calendar      = Calendar.current
     private let dayLabels     = ["S", "M", "T", "W", "T", "F", "S"]
 
+    private var isFriendMode: Bool { friendTodaySteps != nil }
+
     private var cells: [(date: Date?, steps: Int)] {
-        gridManager.gridCells(for: displayedMonth)
+        let base = gridManager.gridCells(for: displayedMonth)
+        guard let todaySteps = friendTodaySteps else { return base }
+        return base.map { cell in
+            guard let date = cell.date else { return cell }
+            let steps = calendar.isDateInToday(date) ? todaySteps : 0
+            return (date, steps)
+        }
     }
 
     private var monthlyTotal: Int {
-        gridManager.monthlyTotal(for: displayedMonth)
+        if let todaySteps = friendTodaySteps {
+            let today = Date()
+            let monthStart = calendar.startOfMonth(for: displayedMonth)
+            let todayMonthStart = calendar.startOfMonth(for: today)
+            return monthStart == todayMonthStart ? todaySteps : 0
+        }
+        return gridManager.monthlyTotal(for: displayedMonth)
     }
 
     private var monthTitle: String {
@@ -227,12 +246,13 @@ struct MonthlyStepGridView: View {
         .cornerRadius(14)
         .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
         .onAppear {
-            // Persist current step count whenever the tab is opened
-            if stepManager.dailySteps > 0 {
+            // Persist current step count whenever the tab is opened (current user only)
+            if !isFriendMode, stepManager.dailySteps > 0 {
                 gridManager.saveSteps(stepManager.dailySteps, for: Date())
             }
         }
         .onChange(of: stepManager.dailySteps) { _, newValue in
+            guard !isFriendMode else { return }
             gridManager.saveSteps(newValue, for: Date())
         }
         .onChange(of: displayedMonth) { _, _ in
