@@ -154,8 +154,9 @@ struct FriendProfileView: View {
         .task(id: friend.uid) {
             async let img = AvatarCache.shared.fetch(uid: friend.uid)
             async let history = fetchStepHistory(uid: friend.uid)
-            profileImage = await img
-            await applyStepHistory(await history)
+            let (loadedImage, loadedHistory) = await (img, history)
+            profileImage = loadedImage
+            applyStepHistory(loadedHistory)
         }
         .onChange(of: dailySteps) { _, newSteps in
             // Keep today's cell live as the friend's step count updates.
@@ -174,7 +175,6 @@ struct FriendProfileView: View {
         return history
     }
 
-    @MainActor
     private func applyStepHistory(_ history: [String: Int]) {
         var merged = history
         // Overlay today's live step count so the current day is always accurate.
