@@ -1749,7 +1749,7 @@ struct UserProfileSheet: View {
 }
 
 private enum ProfileTab: CaseIterable {
-    case activity, grid
+    case activity, grid, stats
 }
 
 struct ProfileView: View {
@@ -1829,6 +1829,10 @@ struct ProfileView: View {
                                         case .grid:
                                             StepGridTabIcon()
                                                 .opacity(selectedProfileTab == tab ? 1 : 0.4)
+                                        case .stats:
+                                            Image(systemName: "trophy.fill")
+                                                .font(.system(size: 20))
+                                                .foregroundColor(selectedProfileTab == tab ? .primary : .secondary)
                                         }
                                     }
                                     .frame(maxWidth: .infinity)
@@ -1873,11 +1877,19 @@ struct ProfileView: View {
                     AppleHealthCard()
                         .padding(.horizontal, 24)
                         .padding(.bottom, 32)
-                } else {
+                } else if selectedProfileTab == .grid {
                     // Monthly step grid (GitHub-style)
                     MonthlyStepGridView()
                         .padding(.horizontal, 24)
                         .padding(.bottom, 32)
+                } else {
+                    // Lifetime leaderboard placement stats
+                    let myEntry = leaderboardService.entries.first(where: { $0.isCurrentUser })
+                    LeaderboardStatsView(
+                        firstPlace:  myEntry?.firstPlace  ?? 0,
+                        secondPlace: myEntry?.secondPlace ?? 0,
+                        thirdPlace:  myEntry?.thirdPlace  ?? 0
+                    )
                 }
 
             }
