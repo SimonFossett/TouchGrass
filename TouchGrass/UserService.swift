@@ -145,6 +145,41 @@ class UserService {
         }
     }
 
+    /// Uploads all locally-stored step history to Firestore `stepHistory` once.
+    /// This makes every historical day visible to friends viewing the monthly grid.
+    /// Exits immediately on subsequent calls (flag persists in UserDefaults).
+    /// Only the higher of local vs cloud is kept for each date, so it's safe to
+    /// call even if the cloud already has partial data.
+    func backfillStepHistoryIfNeeded() async {
+        let flagKey = "stepHistory_backfilled_v1"
+        guard !UserDefaults.standard.bool(forKey: flagKey) else { return }
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+
+        let localData = StepGridManager.shared.allStepData()
+        guard !localData.isEmpty else {
+            UserDefaults.standard.set(true, forKey: flagKey)
+            return
+        }
+
+        let doc = try? await db.collection("users").document(uid).getDocument()
+        let cloudHistory = doc?.data()?["stepHistory"] as? [String: Int] ?? [:]
+
+        var updates: [String: Any] = [:]
+        for (dateStr, localSteps) in localData where localSteps > (cloudHistory[dateStr] ?? 0) {
+            updates["stepHistory.\(dateStr)"] = localSteps
+        }
+
+        if !updates.isEmpty {
+            do {
+                try await db.collection("users").document(uid).updateData(updates)
+            } catch {
+                print("[UserService] backfillStepHistoryIfNeeded failed: \(error)")
+                return // don't mark done — retry next launch
+            }
+        }
+        UserDefaults.standard.set(true, forKey: flagKey)
+    }
+
     /// Resets the current user's daily steps to 0 in Firestore.
     /// Bypasses the normal write throttle — intended for use only at midnight.
     func resetDailySteps() async {
