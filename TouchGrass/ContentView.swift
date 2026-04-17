@@ -2066,7 +2066,10 @@ struct LeaderboardView: View {
                 totalStepScore: stepManager.totalStepScore,
                 dailyStreak: entry.dailyStreak,
                 isCurrentUser: true,
-                hourlySteps: stepManager.hourlyStepsSnapshot
+                hourlySteps: stepManager.hourlyStepsSnapshot,
+                firstPlace:  entry.firstPlace,
+                secondPlace: entry.secondPlace,
+                thirdPlace:  entry.thirdPlace
             )
         }
     }
