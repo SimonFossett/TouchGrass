@@ -360,26 +360,24 @@ function dateStr(d) {
 /**
  * Runs every day at 00:01 UTC.
  *
- * Fix #9 – Streak race condition: instead of every client racing to write
- *   their own streak when they open the leaderboard, this function is the
- *   single authoritative source that decides who won each day.
+ * Single authoritative source for streak evaluation and daily reset:
+ *   - Reads every user's step count for the day that just ended.
+ *   - For each user, compares against their entire friend group.
+ *   - Sole #1 (most steps, > 0, no tie) → streak increments.
+ *   - Everyone else → streak resets to 0.
+ *   - Archives steps to stepHistory and zeroes dailySteps for all users.
  *
- * Fix #10 – Daily steps not resetting: regardless of whether a user opens
- *   the app, their Firestore dailySteps field is zeroed out at midnight so
- *   the leaderboard always shows accurate same-day numbers.
+ * Timezone note: runs at 00:01 UTC. Users in UTC+ timezones may have already
+ * had their local midnight fire on the iOS client, which writes stepHistory
+ * before resetting dailySteps to 0. The resolveSteps() helper reads
+ * stepHistory as a fallback so those users' steps are never lost.
  */
 exports.midnightReset = onSchedule("1 0 * * *", async () => {
   const now = new Date();
-
-  // The day that just ended — this is what we're scoring.
   const yesterday = new Date(now);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
   const yesterdayStr = dateStr(yesterday);
-
-  // Used to detect a consecutive-day streak.
-  const twoDaysAgo = new Date(yesterday);
-  twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 1);
-  const twoDaysAgoStr = dateStr(twoDaysAgo);
+  const todayStr = dateStr(now);
 
   // ── 1. Fetch every user ─────────────────────────────────────────────────
   const usersSnap = await db.collection("users").get();
@@ -394,16 +392,16 @@ exports.midnightReset = onSchedule("1 0 * * *", async () => {
     .where("status", "==", "accepted")
     .get();
 
-  const friendMap = {}; // uid → string[]
+  const friendMap = {};
   friendsSnap.forEach((doc) => {
     const { fromUID, toUID } = doc.data();
     if (!friendMap[fromUID]) friendMap[fromUID] = [];
-    if (!friendMap[toUID]) friendMap[toUID] = [];
+    if (!friendMap[toUID])   friendMap[toUID]   = [];
     friendMap[fromUID].push(toUID);
     friendMap[toUID].push(fromUID);
   });
 
-  // ── 3. Score each user against their own friend group ──────────────────
+  // ── 3. Score each user against their friend group ───────────────────────
   // Firestore batches are capped at 500 ops; we chunk automatically.
   let currentBatch = db.batch();
   const batches = [currentBatch];
@@ -418,53 +416,51 @@ exports.midnightReset = onSchedule("1 0 * * *", async () => {
     opCount++;
   }
 
+  // Returns the step count for the day just ended.
+  // Primary: dailySteps (still populated for users who haven't hit local midnight yet).
+  // Fallback: stepHistory[yesterday] (written by the iOS client when local midnight
+  //   fires before 00:01 UTC, i.e. users in UTC+ timezones).
+  function resolveSteps(u) {
+    const direct = u.dailySteps || 0;
+    if (direct > 0) return direct;
+    return (u.stepHistory || {})[yesterdayStr] || 0;
+  }
+
   for (const uid of Object.keys(users)) {
     const user = users[uid];
     const friendUIDs = friendMap[uid] || [];
     const group = [user, ...friendUIDs.map((fid) => users[fid]).filter(Boolean)];
 
+    // Collect step totals for every participant in this user's friend group.
+    const groupSteps = group.map((u) => ({ uid: u.id, steps: resolveSteps(u) }));
+    const maxSteps = Math.max(0, ...groupSteps.map((g) => g.steps));
+
+    // Strict #1: sole leader with > 0 steps. Ties produce no winner.
+    const leaders = maxSteps > 0 ? groupSteps.filter((g) => g.steps === maxSteps) : [];
+    const winnerUID = leaders.length === 1 ? leaders[0].uid : null;
+
+    const mySteps = resolveSteps(user);
     const updates = {};
 
-    // ── Daily streak ──────────────────────────────────────────────────────
-    // Winner = highest dailySteps in the friend group (before today's reset).
-    const dailyLeader = group.reduce((best, u) =>
-      (u.dailySteps || 0) >= (best.dailySteps || 0) ? u : best
-    );
+    // Every user gets an explicit streak write — no silent skips.
+    // This is what ensures losers (including tied users) always reset to 0.
+    updates.dailyStreak = winnerUID === uid ? (user.dailyStreak || 0) + 1 : 0;
 
-    if (dailyLeader.id === uid && (user.dailySteps || 0) > 0) {
-      const lastUpdated = user.dailyStreakLastUpdated || "";
-      // Only award the streak once per day.
-      if (lastUpdated !== yesterdayStr) {
-        const prev = user.dailyStreak || 0;
-        updates.dailyStreak = lastUpdated === twoDaysAgoStr ? prev + 1 : 1;
-        updates.dailyStreakLastUpdated = yesterdayStr;
+    // Archive to stepHistory before zeroing (only when client hasn't already written it).
+    if (mySteps > 0) {
+      const existing = (user.stepHistory || {})[yesterdayStr] || 0;
+      if (mySteps > existing) {
+        updates[`stepHistory.${yesterdayStr}`] = mySteps;
       }
     }
 
-    // ── Overall streak ────────────────────────────────────────────────────
-    // Winner = highest cumulative stepScore in the friend group.
-    const overallLeader = group.reduce((best, u) =>
-      (u.stepScore || 0) >= (best.stepScore || 0) ? u : best
-    );
-
-    if (overallLeader.id === uid && (user.stepScore || 0) > 0) {
-      const lastUpdated = user.overallStreakLastUpdated || "";
-      if (lastUpdated !== yesterdayStr) {
-        const prev = user.overallStreak || 0;
-        updates.overallStreak = lastUpdated === twoDaysAgoStr ? prev + 1 : 1;
-        updates.overallStreakLastUpdated = yesterdayStr;
-      }
-    }
-
-    // ── Reset dailySteps (fix #10) ────────────────────────────────────────
-    // Zero out dailySteps for every user, whether or not they opened the app
-    // today.  When users open the app the CMPedometer will push today's real
-    // steps back, but until then the leaderboard correctly shows 0.
+    // Reset for the new day — applies to every user regardless of app activity.
     updates.dailySteps = 0;
+    updates.dailyStepsDate = todayStr;
 
     batchUpdate(db.collection("users").doc(uid), updates);
   }
 
   await Promise.all(batches.map((b) => b.commit()));
-  console.log(`midnightReset complete — updated ${opCount} user records.`);
+  console.log(`midnightReset complete — ${opCount} user records updated.`);
 });

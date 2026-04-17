@@ -120,78 +120,6 @@ class UserService {
         return fmt.string(from: yesterday)
     }
 
-    /// Called at midnight with the user's FINAL step count for the day.
-    /// Archives that count, determines if the user won 1st place among their
-    /// friend group, and updates their dailyStreak accordingly.
-    func updateStreakAtMidnight(myFinalSteps: Int) async {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-
-        let friendUIDs = (try? await FriendService.shared.friendUIDs()) ?? []
-        let today     = Self.todayDateString()
-        let yesterday = Self.yesterdayDateString()
-
-        // Read currentStreak before resetting — needed to compute the winner's
-        // incremented value later. A single read here replaces the second
-        // getDocument() call that used to sit at the end of this function.
-        let ownDoc = try? await db.collection("users").document(uid).getDocument()
-        let currentStreak = ownDoc?.data()?["dailyStreak"] as? Int ?? 0
-
-        // Immediately reset streak to 0 AND archive the final step count in one
-        // write. Doing this first ensures:
-        //   • Losers see their streak disappear right away, even if the
-        //     friend-read loop below is slow or fails silently.
-        //   • Friends who fire midnight later can still read previousDaySteps
-        //     even after this device's dailySteps has been reset to 0.
-        do {
-            try await db.collection("users").document(uid).updateData([
-                "dailyStreak":      0,
-                "previousDaySteps": myFinalSteps,
-                "previousDayDate":  yesterday
-            ])
-        } catch {
-            print("[UserService] updateStreakAtMidnight — initial reset failed: \(error)")
-            // Continue anyway so the winner computation still runs.
-        }
-
-        // Determine the highest step count among friends for yesterday.
-        var maxFriendSteps = 0
-        for fUID in friendUIDs {
-            guard let doc = try? await db.collection("users").document(fUID).getDocument() else { continue }
-            let data = doc.data() ?? [:]
-            let storedDate = data["dailyStepsDate"] as? String ?? ""
-            let steps: Int
-            if storedDate == today {
-                // Friend already reset for today — use their archived previous-day count.
-                let prevDate = data["previousDayDate"] as? String ?? ""
-                steps = prevDate == yesterday ? (data["previousDaySteps"] as? Int ?? 0) : 0
-            } else {
-                // Friend hasn't reset yet — their current dailySteps IS yesterday's final count.
-                steps = data["dailySteps"] as? Int ?? 0
-            }
-            maxFriendSteps = max(maxFriendSteps, steps)
-        }
-
-        // Win = strictly most steps AND walked at least 1 step.
-        // On a tie nobody wins (both lose streak).
-        let won: Bool
-        if friendUIDs.isEmpty {
-            won = myFinalSteps > 0   // solo: reward any walking
-        } else {
-            won = myFinalSteps > 0 && myFinalSteps > maxFriendSteps
-        }
-
-        // Only write again if the user won — losers already have streak = 0
-        // from the early reset above, so no second write is needed for them.
-        if won {
-            let newStreak = currentStreak + 1
-            do {
-                try await db.collection("users").document(uid).updateData(["dailyStreak": newStreak])
-            } catch {
-                print("[UserService] updateStreakAtMidnight — winner increment failed: \(error)")
-            }
-        }
-    }
-
     /// Archives `steps` under the "yyyy-MM-dd" key for `date` in the user's
     /// `stepHistory` Firestore map. Only overwrites if the new value is higher,
     /// matching the behaviour of the local StepGridManager. Called once per day
@@ -215,53 +143,6 @@ class UserService {
         } catch {
             print("[UserService] archiveDaySteps failed: \(error)")
         }
-    }
-
-    /// Copies the current Firestore `dailySteps` into `previousDaySteps/previousDayDate`
-    /// if and only if `dailyStepsDate` is yesterday and `previousDayDate` is not already
-    /// yesterday. Call this on app launch (before `startDailyTracking` overwrites the field)
-    /// so streak evaluation can always find yesterday's final step count.
-    func archivePreviousDayStepsIfNeeded() async {
-        guard let uid = Auth.auth().currentUser?.uid else { return }
-        let yesterday = Self.yesterdayDateString()
-        guard let doc = try? await db.collection("users").document(uid).getDocument(),
-              let data = doc.data() else { return }
-        // Already archived for yesterday — nothing to do.
-        if (data["previousDayDate"] as? String) == yesterday { return }
-        // Only archive when the stored daily-steps value belongs to yesterday.
-        guard (data["dailyStepsDate"] as? String) == yesterday else { return }
-        let steps = data["dailySteps"] as? Int ?? 0
-        guard steps > 0 else { return }
-        do {
-            try await db.collection("users").document(uid).updateData([
-                "previousDaySteps": steps,
-                "previousDayDate":  yesterday
-            ])
-        } catch {
-            print("[UserService] archivePreviousDayStepsIfNeeded failed: \(error)")
-        }
-    }
-
-    /// Returns yesterday's final step count for the current user using a three-fallback
-    /// chain so streak evaluation works even when the midnight timer was missed.
-    func fetchYesterdayStepsForStreak() async -> Int {
-        guard let uid = Auth.auth().currentUser?.uid else { return 0 }
-        let yesterday = Self.yesterdayDateString()
-        guard let doc = try? await db.collection("users").document(uid).getDocument(),
-              let data = doc.data() else { return 0 }
-        // 1. Explicit archive written either at midnight or by archivePreviousDayStepsIfNeeded.
-        if (data["previousDayDate"] as? String) == yesterday {
-            return data["previousDaySteps"] as? Int ?? 0
-        }
-        // 2. stepHistory map (written at midnight by archiveDaySteps).
-        if let history = data["stepHistory"] as? [String: Int], let v = history[yesterday] {
-            return v
-        }
-        // 3. dailySteps field if it still belongs to yesterday (app launched late on the same day).
-        if (data["dailyStepsDate"] as? String) == yesterday {
-            return data["dailySteps"] as? Int ?? 0
-        }
-        return 0
     }
 
     /// Resets the current user's daily steps to 0 in Firestore.
