@@ -108,10 +108,11 @@ private func stepColor(for steps: Int) -> Color {
 // MARK: - Monthly Step Grid View
 
 struct MonthlyStepGridView: View {
-    /// When non-nil, the grid renders in read-only "friend" mode: today's cell
-    /// shows `friendTodaySteps` and every other day is empty. Friend daily
-    /// history isn't stored in Firestore, so earlier days always read as 0.
-    var friendTodaySteps: Int? = nil
+    /// When non-nil, the grid renders in read-only "friend" mode using the
+    /// provided date→steps map (keys are "yyyy-MM-dd"). Days absent from the
+    /// map are shown as zero / no-activity. Pass `[:]` while the history is
+    /// still loading so the grid renders immediately in the correct mode.
+    var friendStepHistory: [String: Int]? = nil
 
     private let gridManager = StepGridManager.shared
     private let stepManager = StepCounterManager.shared
@@ -123,26 +124,35 @@ struct MonthlyStepGridView: View {
     private let calendar      = Calendar.current
     private let dayLabels     = ["S", "M", "T", "W", "T", "F", "S"]
 
-    private var isFriendMode: Bool { friendTodaySteps != nil }
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private var isFriendMode: Bool { friendStepHistory != nil }
 
     private var cells: [(date: Date?, steps: Int)] {
         let base = gridManager.gridCells(for: displayedMonth)
-        guard let todaySteps = friendTodaySteps else { return base }
+        guard let history = friendStepHistory else { return base }
         return base.map { cell in
             guard let date = cell.date else { return cell }
-            let steps = calendar.isDateInToday(date) ? todaySteps : 0
-            return (date, steps)
+            let key = Self.dateFormatter.string(from: date)
+            return (date, history[key] ?? 0)
         }
     }
 
     private var monthlyTotal: Int {
-        if let todaySteps = friendTodaySteps {
-            let today = Date()
-            let monthStart = calendar.startOfMonth(for: displayedMonth)
-            let todayMonthStart = calendar.startOfMonth(for: today)
-            return monthStart == todayMonthStart ? todaySteps : 0
+        guard let history = friendStepHistory else {
+            return gridManager.monthlyTotal(for: displayedMonth)
         }
-        return gridManager.monthlyTotal(for: displayedMonth)
+        let monthStart = calendar.startOfMonth(for: displayedMonth)
+        guard let range = calendar.range(of: .day, in: .month, for: monthStart) else { return 0 }
+        return range.reduce(0) { total, day in
+            guard let date = calendar.date(byAdding: .day, value: day - 1, to: monthStart) else { return total }
+            let key = Self.dateFormatter.string(from: date)
+            return total + (history[key] ?? 0)
+        }
     }
 
     private var monthTitle: String {

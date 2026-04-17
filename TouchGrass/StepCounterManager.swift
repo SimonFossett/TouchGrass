@@ -83,7 +83,11 @@ class StepCounterManager {
             self.dailySteps = 0
             self.hourlyStepsSnapshot = Array(repeating: 0, count: 24)
             Task {
-                // Evaluate streak, archive yesterday's count, then reset to 0.
+                // Archive completed day to Firestore stepHistory (yesterday's date).
+                let yesterday = Calendar.current.date(byAdding: .day, value: -1,
+                    to: Calendar.current.startOfDay(for: Date())) ?? Date()
+                await UserService.shared.archiveDaySteps(finalSteps, for: yesterday)
+                // Evaluate streak, then reset daily counter to 0.
                 await UserService.shared.updateStreakAtMidnight(myFinalSteps: finalSteps)
                 await UserService.shared.resetDailySteps()
             }

@@ -661,14 +661,19 @@ struct HomeView: View {
                 viewModel.removeFriend(uid: friend.uid)
                 selectedFriend = nil
             } onViewProfile: {
-                // Dismiss the sheet first, then present the full-screen profile
-                // on the next run loop tick so the transitions don't collide.
                 selectedFriend = nil
-                DispatchQueue.main.async { profileFriend = friend }
+                // Hide the tab bar and present on the next run loop so the
+                // sheet dismissal and cover presentation don't collide.
+                DispatchQueue.main.async {
+                    hideTabBar.wrappedValue = true
+                    profileFriend = friend
+                }
             }
             .presentationDetents([.medium, .large])
         }
-        .fullScreenCover(item: $profileFriend) { friend in
+        .fullScreenCover(item: $profileFriend, onDismiss: {
+            hideTabBar.wrappedValue = false
+        }) { friend in
             FriendProfileView(friend: friend)
         }
         .fullScreenCover(isPresented: $showInbox) {

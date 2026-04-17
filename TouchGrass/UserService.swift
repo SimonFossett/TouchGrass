@@ -192,6 +192,31 @@ class UserService {
         }
     }
 
+    /// Archives `steps` under the "yyyy-MM-dd" key for `date` in the user's
+    /// `stepHistory` Firestore map. Only overwrites if the new value is higher,
+    /// matching the behaviour of the local StepGridManager. Called once per day
+    /// at midnight with the completed day's final step count.
+    func archiveDaySteps(_ steps: Int, for date: Date) async {
+        guard steps > 0 else { return }
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        let key = fmt.string(from: date)
+        let ref = db.collection("users").document(uid)
+        do {
+            _ = try await db.runTransaction { transaction, _ in
+                let snap = try? transaction.getDocument(ref)
+                let existing = (snap?.data()?["stepHistory"] as? [String: Int])?[key] ?? 0
+                if steps > existing {
+                    transaction.updateData(["stepHistory.\(key)": steps], forDocument: ref)
+                }
+                return nil
+            }
+        } catch {
+            print("[UserService] archiveDaySteps failed: \(error)")
+        }
+    }
+
     /// Resets the current user's daily steps to 0 in Firestore.
     /// Bypasses the normal write throttle — intended for use only at midnight.
     func resetDailySteps() async {
