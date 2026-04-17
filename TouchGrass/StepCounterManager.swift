@@ -6,6 +6,7 @@
 import Foundation
 import CoreMotion
 import Observation
+import FirebaseAuth
 
 @Observable
 class StepCounterManager {
@@ -29,7 +30,8 @@ class StepCounterManager {
 
     // The sum of every completed day's final step count. Today's live contribution
     // is always dailySteps, added on top at display time.
-    private static let baseScoreKey = "stepScore_base"
+    private static let baseScoreKey              = "stepScore_base"
+    private static let lastStreakEvaluationKey   = "lastStreakEvaluationDate"
 
     private var baseScore: Int {
         get { UserDefaults.standard.integer(forKey: Self.baseScoreKey) }
@@ -50,8 +52,15 @@ class StepCounterManager {
             print("Step counting not available on this device")
             return
         }
-        startDailyTracking()
         scheduleMidnightReset()
+        // Archive yesterday's steps and evaluate streak BEFORE startDailyTracking
+        // so the CMPedometer callback can't overwrite Firestore dailySteps (which
+        // may still hold yesterday's count) before streak evaluation reads it.
+        Task { @MainActor in
+            await UserService.shared.archivePreviousDayStepsIfNeeded()
+            await evaluateStreakIfNeeded()
+            startDailyTracking()
+        }
         // Pull the authoritative score from Firestore in case of reinstall or
         // first launch on a new device so no history is lost.
         Task { await syncScoreFromFirestore() }
@@ -137,10 +146,28 @@ class StepCounterManager {
                 await UserService.shared.updateStepScore(newBase, force: true)
                 await UserService.shared.updateStreakAtMidnight(myFinalSteps: finalDailySteps)
                 await UserService.shared.resetDailySteps()
+                // Mark streak as evaluated for the new day so the launch-time
+                // evaluateStreakIfNeeded() guard skips it if the app is reopened.
+                let newDay = UserService.todayDateString()
+                UserDefaults.standard.set(newDay, forKey: Self.lastStreakEvaluationKey)
             }
             self.startDailyTracking()
             self.scheduleMidnightReset()
         }
+    }
+
+    // MARK: - Streak evaluation on launch
+
+    // Runs streak evaluation if we haven't done so today. This catches the common
+    // case where the midnight timer never fires because the app was closed.
+    @MainActor
+    private func evaluateStreakIfNeeded() async {
+        guard Auth.auth().currentUser != nil else { return }
+        let today = UserService.todayDateString()
+        guard UserDefaults.standard.string(forKey: Self.lastStreakEvaluationKey) != today else { return }
+        let myYesterdaySteps = await UserService.shared.fetchYesterdayStepsForStreak()
+        await UserService.shared.updateStreakAtMidnight(myFinalSteps: myYesterdaySteps)
+        UserDefaults.standard.set(today, forKey: Self.lastStreakEvaluationKey)
     }
 
     // MARK: - Sync from Firestore on launch

@@ -217,6 +217,53 @@ class UserService {
         }
     }
 
+    /// Copies the current Firestore `dailySteps` into `previousDaySteps/previousDayDate`
+    /// if and only if `dailyStepsDate` is yesterday and `previousDayDate` is not already
+    /// yesterday. Call this on app launch (before `startDailyTracking` overwrites the field)
+    /// so streak evaluation can always find yesterday's final step count.
+    func archivePreviousDayStepsIfNeeded() async {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        let yesterday = Self.yesterdayDateString()
+        guard let doc = try? await db.collection("users").document(uid).getDocument(),
+              let data = doc.data() else { return }
+        // Already archived for yesterday — nothing to do.
+        if (data["previousDayDate"] as? String) == yesterday { return }
+        // Only archive when the stored daily-steps value belongs to yesterday.
+        guard (data["dailyStepsDate"] as? String) == yesterday else { return }
+        let steps = data["dailySteps"] as? Int ?? 0
+        guard steps > 0 else { return }
+        do {
+            try await db.collection("users").document(uid).updateData([
+                "previousDaySteps": steps,
+                "previousDayDate":  yesterday
+            ])
+        } catch {
+            print("[UserService] archivePreviousDayStepsIfNeeded failed: \(error)")
+        }
+    }
+
+    /// Returns yesterday's final step count for the current user using a three-fallback
+    /// chain so streak evaluation works even when the midnight timer was missed.
+    func fetchYesterdayStepsForStreak() async -> Int {
+        guard let uid = Auth.auth().currentUser?.uid else { return 0 }
+        let yesterday = Self.yesterdayDateString()
+        guard let doc = try? await db.collection("users").document(uid).getDocument(),
+              let data = doc.data() else { return 0 }
+        // 1. Explicit archive written either at midnight or by archivePreviousDayStepsIfNeeded.
+        if (data["previousDayDate"] as? String) == yesterday {
+            return data["previousDaySteps"] as? Int ?? 0
+        }
+        // 2. stepHistory map (written at midnight by archiveDaySteps).
+        if let history = data["stepHistory"] as? [String: Int], let v = history[yesterday] {
+            return v
+        }
+        // 3. dailySteps field if it still belongs to yesterday (app launched late on the same day).
+        if (data["dailyStepsDate"] as? String) == yesterday {
+            return data["dailySteps"] as? Int ?? 0
+        }
+        return 0
+    }
+
     /// Resets the current user's daily steps to 0 in Firestore.
     /// Bypasses the normal write throttle — intended for use only at midnight.
     func resetDailySteps() async {
