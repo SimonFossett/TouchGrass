@@ -68,9 +68,9 @@ class UserService {
     }
 
     /// Pushes the user's latest step count up to Firestore so friends can see it.
-    /// Writes are throttled to at most once every 30 seconds.
-    func updateStepScore(_ steps: Int) async {
-        guard Date().timeIntervalSince(lastStepScoreWrite) >= stepWriteInterval else { return }
+    /// Writes are throttled to at most once every 5 seconds unless `force` is true.
+    func updateStepScore(_ steps: Int, force: Bool = false) async {
+        guard force || Date().timeIntervalSince(lastStepScoreWrite) >= stepWriteInterval else { return }
         guard let uid = Auth.auth().currentUser?.uid else { return }
         do {
             try await db.collection("users").document(uid).updateData(["stepScore": steps])
