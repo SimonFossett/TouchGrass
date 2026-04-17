@@ -6,6 +6,7 @@
 import SwiftUI
 import Charts
 import UIKit
+import FirebaseFirestore
 
 private enum FriendProfileTab: CaseIterable {
     case activity, grid
@@ -17,8 +18,12 @@ struct FriendProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var profileImage: UIImage? = nil
     @State private var selectedTab: FriendProfileTab = .activity
+    /// Starts as an empty dict (friend mode, loading). Populated once Firestore
+    /// responds. Keys are "yyyy-MM-dd"; today's live count is merged in after fetch.
+    @State private var stepHistory: [String: Int] = [:]
 
     private let leaderboardService = LeaderboardService.shared
+    private let db = Firestore.firestore()
 
     private var entry: LeaderboardEntry? {
         leaderboardService.entries.first(where: { $0.id == friend.uid })
@@ -123,7 +128,7 @@ struct FriendProfileView: View {
                             .padding(.horizontal, 24)
                             .padding(.bottom, 32)
                     } else {
-                        MonthlyStepGridView(friendTodaySteps: dailySteps)
+                        MonthlyStepGridView(friendStepHistory: stepHistory)
                             .padding(.horizontal, 24)
                             .padding(.bottom, 32)
                     }
@@ -132,9 +137,10 @@ struct FriendProfileView: View {
             }
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 24) }
         }
+        .background(Color(UIColor.systemBackground).ignoresSafeArea())
         .overlay(alignment: .topLeading) {
             Button { dismiss() } label: {
-                Image(systemName: "xmark")
+                Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.primary)
                     .padding(10)
@@ -146,8 +152,38 @@ struct FriendProfileView: View {
             .padding(.top, 16)
         }
         .task(id: friend.uid) {
-            profileImage = await AvatarCache.shared.fetch(uid: friend.uid)
+            async let img = AvatarCache.shared.fetch(uid: friend.uid)
+            async let history = fetchStepHistory(uid: friend.uid)
+            profileImage = await img
+            await applyStepHistory(await history)
         }
+        .onChange(of: dailySteps) { _, newSteps in
+            // Keep today's cell live as the friend's step count updates.
+            let todayKey = UserService.todayDateString()
+            if newSteps > (stepHistory[todayKey] ?? 0) {
+                stepHistory[todayKey] = newSteps
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func fetchStepHistory(uid: String) async -> [String: Int] {
+        guard let doc = try? await db.collection("users").document(uid).getDocument(),
+              let history = doc.data()?["stepHistory"] as? [String: Int] else { return [:] }
+        return history
+    }
+
+    @MainActor
+    private func applyStepHistory(_ history: [String: Int]) {
+        var merged = history
+        // Overlay today's live step count so the current day is always accurate.
+        let todayKey = UserService.todayDateString()
+        let live = dailySteps
+        if live > 0 {
+            merged[todayKey] = max(live, merged[todayKey] ?? 0)
+        }
+        stepHistory = merged
     }
 }
 
