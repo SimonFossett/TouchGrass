@@ -55,6 +55,9 @@ class StepCounterManager {
         // Pull the authoritative score from Firestore in case of reinstall or
         // first launch on a new device so no history is lost.
         Task { await syncScoreFromFirestore() }
+        // One-time upload of local StepGridManager history to Firestore so
+        // friends can see the full monthly grid, not just today's data.
+        Task { await UserService.shared.backfillStepHistoryIfNeeded() }
     }
 
     // MARK: - Daily steps (live, resets at midnight)

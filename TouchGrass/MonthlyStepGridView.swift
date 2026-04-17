@@ -43,6 +43,19 @@ final class StepGridManager {
         return defaults.integer(forKey: key)
     }
 
+    /// Returns all stored step data as a {yyyy-MM-dd: steps} dictionary.
+    /// Used for one-time Firestore backfill so friends can see historical grids.
+    func allStepData() -> [String: Int] {
+        var result: [String: Int] = [:]
+        for (key, value) in defaults.dictionaryRepresentation() where key.hasPrefix(keyPrefix) {
+            let dateStr = String(key.dropFirst(keyPrefix.count))
+            if let steps = value as? Int, steps > 0 {
+                result[dateStr] = steps
+            }
+        }
+        return result
+    }
+
     // MARK: - Monthly Data
 
     /// Returns one cell per calendar slot for the given month's grid.
