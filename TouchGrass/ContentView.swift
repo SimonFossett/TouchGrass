@@ -669,7 +669,7 @@ struct HomeView: View {
                     profileFriend = friend
                 }
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.height(560), .large])
         }
         .fullScreenCover(item: $profileFriend, onDismiss: {
             hideTabBar.wrappedValue = false
