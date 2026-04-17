@@ -101,10 +101,15 @@ class HealthKitManager {
 
     /// Takes the higher of HealthKit and CMPedometer steps, updates the local
     /// step counter, and pushes the value to Firebase so it shows on the leaderboard.
-    // Takes the higher of HealthKit and CMPedometer step counts and pushes it to Firestore for the leaderboard.
+    /// Uses `todaysPersistedSteps` (date-validated) rather than the in-memory
+    /// `dailySteps` property, which can be stale across the midnight boundary.
     func syncToLeaderboard() {
-        guard isAvailable, dailySteps > 0 else { return }
-        let effective = max(dailySteps, StepCounterManager.shared.dailySteps)
+        // todaysPersistedSteps returns 0 when the persisted date is not today,
+        // preventing any carry-over of the previous day's HealthKit count.
+        let hkSteps = Self.todaysPersistedSteps
+        guard isAvailable, hkSteps > 0 else { return }
+        let effective = max(hkSteps, StepCounterManager.shared.dailySteps)
+        guard effective > StepCounterManager.shared.dailySteps else { return }
         StepCounterManager.shared.dailySteps = effective
         Task { await UserService.shared.updateDailySteps(effective) }
     }
