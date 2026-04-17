@@ -1554,8 +1554,19 @@ struct SearchView: View {
 
 struct MapView: View {
     var viewModel: MapViewModel
+    @State private var profileFriend: Friend? = nil
+    @Environment(\.hideTabBar) private var hideTabBar
+
     var body: some View {
-        MapScreen(viewModel: viewModel)
+        MapScreen(viewModel: viewModel) { friend in
+            hideTabBar.wrappedValue = true
+            profileFriend = friend
+        }
+        .fullScreenCover(item: $profileFriend, onDismiss: {
+            hideTabBar.wrappedValue = false
+        }) { friend in
+            FriendProfileView(friend: friend)
+        }
     }
 }
 
@@ -2050,7 +2061,9 @@ struct SettingsView: View {
 struct LeaderboardView: View {
     @State private var leaderboardType: LeaderboardType = .daily
     @State private var firstPlaceImage: UIImage? = nil
+    @State private var profileFriend: Friend? = nil
     @Environment(\.tabBarCompact) private var tabBarCompact
+    @Environment(\.hideTabBar) private var hideTabBar
     private let leaderboardService = LeaderboardService.shared
     private let stepManager = StepCounterManager.shared
 
@@ -2145,7 +2158,25 @@ struct LeaderboardView: View {
                     } else {
                         VStack(spacing: 8) {
                             ForEach(Array(sorted.enumerated()), id: \.element.id) { idx, entry in
-                                LeaderboardRowView(placing: idx + 1, entry: entry, type: leaderboardType)
+                                if entry.isCurrentUser {
+                                    LeaderboardRowView(placing: idx + 1, entry: entry, type: leaderboardType)
+                                } else {
+                                    Button {
+                                        let friend = Friend(
+                                            uid: entry.id,
+                                            name: entry.username,
+                                            coordinate: .init(latitude: 0, longitude: 0),
+                                            stepScore: entry.totalStepScore,
+                                            isPinned: false,
+                                            streak: entry.dailyStreak
+                                        )
+                                        hideTabBar.wrappedValue = true
+                                        profileFriend = friend
+                                    } label: {
+                                        LeaderboardRowView(placing: idx + 1, entry: entry, type: leaderboardType)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
                         }
                         .padding(.horizontal, 24)
@@ -2166,6 +2197,11 @@ struct LeaderboardView: View {
         }
         .onChange(of: leaderboardService.entries) {
             Task { await loadFirstPlaceStory() }
+        }
+        .fullScreenCover(item: $profileFriend, onDismiss: {
+            hideTabBar.wrappedValue = false
+        }) { friend in
+            FriendProfileView(friend: friend)
         }
     }
 
