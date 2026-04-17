@@ -454,6 +454,19 @@ exports.midnightReset = onSchedule("1 0 * * *", async () => {
       }
     }
 
+    // ── Leaderboard placement stats ──────────────────────────────────────────
+    // Standard competitive ranking: count members with strictly more steps to
+    // get the user's 1-based rank (ties share the same rank).
+    // Idempotency guard: leaderboardStatsDate tracks the last day we updated
+    // these counters, preventing double-counting if the function re-runs.
+    if (user.leaderboardStatsDate !== yesterdayStr && mySteps > 0) {
+      const rank = groupSteps.filter((g) => g.steps > mySteps).length + 1;
+      if (rank === 1)      updates["leaderboardStats.firstPlace"]  = FieldValue.increment(1);
+      else if (rank === 2) updates["leaderboardStats.secondPlace"] = FieldValue.increment(1);
+      else if (rank === 3) updates["leaderboardStats.thirdPlace"]  = FieldValue.increment(1);
+      updates.leaderboardStatsDate = yesterdayStr;
+    }
+
     // Reset for the new day — applies to every user regardless of app activity.
     updates.dailySteps = 0;
     updates.dailyStepsDate = todayStr;

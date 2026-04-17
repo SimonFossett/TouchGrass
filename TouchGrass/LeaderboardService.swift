@@ -29,6 +29,10 @@ struct LeaderboardEntry: Identifiable, Equatable {
     /// 24-slot cumulative snapshot written by StepCounterManager. Index = hour of day;
     /// value = highest step count recorded during that hour. Empty when not yet synced.
     let hourlySteps: [Int]
+    /// Lifetime placement counters updated nightly by the midnightReset Cloud Function.
+    let firstPlace: Int
+    let secondPlace: Int
+    let thirdPlace: Int
 
     // Returns the relevant step value (daily steps or total score) for a given leaderboard type.
     func value(for type: LeaderboardType) -> Int {
@@ -97,6 +101,7 @@ class LeaderboardService {
                         ? (data["hourlySteps"] as? [Int] ?? [])
                         : []
 
+                    let stats = data["leaderboardStats"] as? [String: Any] ?? [:]
                     let entry = LeaderboardEntry(
                         id: uid,
                         username: username,
@@ -104,7 +109,10 @@ class LeaderboardService {
                         totalStepScore: data["stepScore"] as? Int ?? 0,
                         dailyStreak: data["dailyStreak"] as? Int ?? 0,
                         isCurrentUser: isCurrentUser,
-                        hourlySteps: hourlySteps
+                        hourlySteps: hourlySteps,
+                        firstPlace:  stats["firstPlace"]  as? Int ?? 0,
+                        secondPlace: stats["secondPlace"] as? Int ?? 0,
+                        thirdPlace:  stats["thirdPlace"]  as? Int ?? 0
                     )
 
                     DispatchQueue.main.async {

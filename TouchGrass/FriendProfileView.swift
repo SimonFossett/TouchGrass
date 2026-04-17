@@ -9,7 +9,7 @@ import UIKit
 import FirebaseFirestore
 
 private enum FriendProfileTab: CaseIterable {
-    case activity, grid
+    case activity, grid, stats
 }
 
 struct FriendProfileView: View {
@@ -91,6 +91,10 @@ struct FriendProfileView: View {
                                             case .grid:
                                                 StepGridTabIcon()
                                                     .opacity(selectedTab == tab ? 1 : 0.4)
+                                            case .stats:
+                                                Image(systemName: "trophy.fill")
+                                                    .font(.system(size: 20))
+                                                    .foregroundColor(selectedTab == tab ? .primary : .secondary)
                                             }
                                         }
                                         .frame(maxWidth: .infinity)
@@ -127,10 +131,16 @@ struct FriendProfileView: View {
                         FriendDailyStepsChartView(entry: entry, displayName: friend.name)
                             .padding(.horizontal, 24)
                             .padding(.bottom, 32)
-                    } else {
+                    } else if selectedTab == .grid {
                         MonthlyStepGridView(friendStepHistory: stepHistory)
                             .padding(.horizontal, 24)
                             .padding(.bottom, 32)
+                    } else {
+                        LeaderboardStatsView(
+                            firstPlace:  entry?.firstPlace  ?? 0,
+                            secondPlace: entry?.secondPlace ?? 0,
+                            thirdPlace:  entry?.thirdPlace  ?? 0
+                        )
                     }
                 }
                 .frame(maxWidth: .infinity)
