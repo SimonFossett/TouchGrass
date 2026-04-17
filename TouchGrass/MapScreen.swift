@@ -192,6 +192,7 @@ struct MapAvatarView: View {
 // MARK: - Map View
 struct MapScreen: View {
     @State var viewModel: MapViewModel
+    var onSelectFriend: ((Friend) -> Void)? = nil
     private let stepManager = StepCounterManager.shared
 
     @State private var currentUID: String? = Auth.auth().currentUser?.uid
@@ -229,6 +230,9 @@ struct MapScreen: View {
                                 .padding(2)
                                 .background(Color.white.opacity(0.8))
                                 .cornerRadius(5)
+                        }
+                        .onTapGesture {
+                            onSelectFriend?(friend)
                         }
                     }
                 }
