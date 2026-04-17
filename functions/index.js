@@ -461,9 +461,9 @@ exports.midnightReset = onSchedule("1 0 * * *", async () => {
     // these counters, preventing double-counting if the function re-runs.
     if (user.leaderboardStatsDate !== yesterdayStr && mySteps > 0) {
       const rank = groupSteps.filter((g) => g.steps > mySteps).length + 1;
-      if (rank === 1)      updates["leaderboardStats.firstPlace"]  = FieldValue.increment(1);
-      else if (rank === 2) updates["leaderboardStats.secondPlace"] = FieldValue.increment(1);
-      else if (rank === 3) updates["leaderboardStats.thirdPlace"]  = FieldValue.increment(1);
+      if (rank <= 1) updates["leaderboardStats.firstPlace"]  = FieldValue.increment(1);
+      if (rank <= 2) updates["leaderboardStats.secondPlace"] = FieldValue.increment(1);
+      if (rank <= 3) updates["leaderboardStats.thirdPlace"]  = FieldValue.increment(1);
       updates.leaderboardStatsDate = yesterdayStr;
     }
 
