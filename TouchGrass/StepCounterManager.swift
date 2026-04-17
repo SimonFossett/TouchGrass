@@ -27,17 +27,20 @@ class StepCounterManager {
 
     // MARK: - Base score (all completed days, persisted in UserDefaults)
 
-    // The sum of every day's final step count up to (but not including) today.
-    // Today's live contribution is always dailySteps, added on top at display time.
+    // The sum of every completed day's final step count. Today's live contribution
+    // is always dailySteps, added on top at display time.
     private static let baseScoreKey = "stepScore_base"
 
     private var baseScore: Int {
         get { UserDefaults.standard.integer(forKey: Self.baseScoreKey) }
-        set {
-            UserDefaults.standard.set(newValue, forKey: Self.baseScoreKey)
-            totalStepScore = newValue + dailySteps
-        }
+        // Setter only writes to UserDefaults; callers must update totalStepScore explicitly.
+        set { UserDefaults.standard.set(newValue, forKey: Self.baseScoreKey) }
     }
+
+    // Incremented each time tracking is restarted (e.g. at midnight).
+    // Captured in pedometer closures so any callbacks that arrive from the
+    // previous session are silently dropped.
+    @ObservationIgnored private var trackingGeneration: Int = 0
 
     private init() {
         // Show the last-known total immediately before CMPedometer responds.
@@ -56,15 +59,22 @@ class StepCounterManager {
 
     // MARK: - Daily steps (live, resets at midnight)
 
-    // Starts a live CMPedometer update stream from midnight that keeps dailySteps current.
     private func startDailyTracking() {
         let startOfDay = Calendar.current.startOfDay(for: Date())
+        // Capture the generation at the time this session starts.
+        // Any callback that arrives with a different generation is stale and dropped.
+        let generation = trackingGeneration
         dailyPedometer.startUpdates(from: startOfDay) { [weak self] data, _ in
-            guard let self, let steps = data?.numberOfSteps.intValue else { return }
+            guard let self,
+                  self.trackingGeneration == generation,
+                  let steps = data?.numberOfSteps.intValue else { return }
             // Take the higher of CMPedometer and any HealthKit sync persisted today.
             let effective = max(steps, HealthKitManager.todaysPersistedSteps)
             let hour = Calendar.current.component(.hour, from: Date())
             DispatchQueue.main.async {
+                // Second generation check: guards against a callback that was
+                // posted to the main queue just before a midnight reset ran.
+                guard self.trackingGeneration == generation else { return }
                 self.dailySteps = effective
                 self.totalStepScore = self.baseScore + effective
                 self.hourlyStepsSnapshot[hour] = max(self.hourlyStepsSnapshot[hour], effective)
@@ -94,30 +104,36 @@ class StepCounterManager {
 
             let finalDailySteps = self.dailySteps
 
-            // Commit today into the base score BEFORE resetting dailySteps so
-            // totalStepScore never dips — it transitions from
-            // (oldBase + finalDaily) → (newBase + 0) = same value.
-            let newBase = self.baseScore + finalDailySteps
-            UserDefaults.standard.set(newBase, forKey: Self.baseScoreKey)
-
-            // Persist today's final count to the local step grid.
-            if finalDailySteps > 0 {
-                StepGridManager.shared.saveSteps(finalDailySteps, for: Date())
-            }
-
+            // Increment the generation BEFORE stopUpdates so any callback that
+            // is already queued on the main queue (but hasn't run yet) is rejected.
+            self.trackingGeneration += 1
             self.dailyPedometer.stopUpdates()
+
+            // Commit today into the base score BEFORE resetting dailySteps so
+            // totalStepScore never dips: (oldBase + finalDaily) → (newBase + 0).
+            let newBase = self.baseScore + finalDailySteps
+            self.baseScore = newBase
             self.dailySteps = 0
             self.totalStepScore = newBase
+
+            // Save the completed day's steps under YESTERDAY's date.
+            // At this point Date() == midnight of the new day, so we must subtract
+            // one day to get the date that just finished.
+            let yesterday = calendar.date(
+                byAdding: .day, value: -1,
+                to: calendar.startOfDay(for: Date())
+            ) ?? Date()
+
+            if finalDailySteps > 0 {
+                StepGridManager.shared.saveSteps(finalDailySteps, for: yesterday)
+            }
+
             self.hourlyStepsSnapshot = Array(repeating: 0, count: 24)
 
             Task {
-                // Archive the completed day's steps to Firestore step history.
-                let yesterday = Calendar.current.date(
-                    byAdding: .day, value: -1,
-                    to: Calendar.current.startOfDay(for: Date())
-                ) ?? Date()
                 await UserService.shared.archiveDaySteps(finalDailySteps, for: yesterday)
-                // Force-write the new committed base score to Firestore immediately.
+                // Force-write the new committed base to Firestore, bypassing the
+                // throttle so it's immediately visible to friends.
                 await UserService.shared.updateStepScore(newBase, force: true)
                 await UserService.shared.updateStreakAtMidnight(myFinalSteps: finalDailySteps)
                 await UserService.shared.resetDailySteps()
@@ -139,15 +155,15 @@ class StepCounterManager {
         guard firestoreTotal > localTotal else { return }
         // Firestore is higher — attribute the difference to baseScore so today's
         // live dailySteps still adds correctly on top.
-        let newBase = max(firestoreTotal - dailySteps, 0)
-        UserDefaults.standard.set(newBase, forKey: Self.baseScoreKey)
-        totalStepScore = newBase + dailySteps
+        baseScore = max(firestoreTotal - dailySteps, 0)
+        totalStepScore = baseScore + dailySteps
     }
 
     // MARK: - Stop tracking
 
     // Stops the daily CMPedometer live-update stream.
     func stopTracking() {
+        trackingGeneration += 1
         dailyPedometer.stopUpdates()
     }
 
