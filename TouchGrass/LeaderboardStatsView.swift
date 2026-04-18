@@ -7,54 +7,58 @@ import SwiftUI
 
 // MARK: - Leaderboard Stats View
 
-/// Displays a user's lifetime leaderboard placement counters (1st / 2nd / 3rd).
-/// Data comes from the Firestore `leaderboardStats` map, updated nightly by the
-/// midnightReset Cloud Function. Used by both ProfileView and FriendProfileView.
 struct LeaderboardStatsView: View {
     let firstPlace: Int
     let secondPlace: Int
     let thirdPlace: Int
 
     var body: some View {
-        VStack(spacing: 14) {
-            PlacementCard(
-                count: firstPlace,
-                unit: firstPlace == 1 ? "Win" : "Wins"
-            )
-            PlacementCard(
-                count: secondPlace,
-                unit: "Top 2"
-            )
-            PlacementCard(
-                count: thirdPlace,
-                unit: "Top 3"
-            )
+        HStack(spacing: 0) {
+            StatCell(count: firstPlace, label: "WINS")
+
+            Rectangle()
+                .fill(Color.primary.opacity(0.15))
+                .frame(width: 1)
+                .padding(.vertical, 12)
+
+            StatCell(count: secondPlace, label: "PLACES IN TOP 2")
+
+            Rectangle()
+                .fill(Color.primary.opacity(0.15))
+                .frame(width: 1)
+                .padding(.vertical, 12)
+
+            StatCell(count: thirdPlace, label: "PLACES IN TOP 3")
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .background(GlassBackground(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
         .padding(.horizontal, 24)
         .padding(.bottom, 32)
     }
 }
 
-// MARK: - Placement Card
+// MARK: - Stat Cell
 
-private struct PlacementCard: View {
+private struct StatCell: View {
     let count: Int
-    let unit: String
+    let label: String
 
     var body: some View {
-        HStack(spacing: 18) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(count.formatted()) \(unit)")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .monospacedDigit()
-            }
+        VStack(spacing: 10) {
+            Text("\(count.formatted())")
+                .font(.system(size: 46, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
 
-            Spacer()
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(1.2)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(GlassBackground(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+        .frame(maxWidth: .infinity)
     }
 }
