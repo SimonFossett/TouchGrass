@@ -13,25 +13,24 @@ struct LeaderboardStatsView: View {
     let thirdPlace: Int
 
     var body: some View {
-        HStack(spacing: 0) {
+        VStack(spacing: 0) {
             StatCell(count: firstPlace, label: "WINS")
 
             Rectangle()
                 .fill(Color.primary.opacity(0.15))
-                .frame(width: 1)
-                .padding(.vertical, 12)
+                .frame(height: 1)
+                .padding(.horizontal, 24)
 
             StatCell(count: secondPlace, label: "PLACES IN TOP 2")
 
             Rectangle()
                 .fill(Color.primary.opacity(0.15))
-                .frame(width: 1)
-                .padding(.vertical, 12)
+                .frame(height: 1)
+                .padding(.horizontal, 24)
 
             StatCell(count: thirdPlace, label: "PLACES IN TOP 3")
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
         .background(GlassBackground(cornerRadius: 16))
         .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
         .padding(.horizontal, 24)
@@ -60,5 +59,6 @@ private struct StatCell: View {
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 }
